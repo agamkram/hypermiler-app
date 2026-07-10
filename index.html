@@ -141,6 +141,13 @@
       border-radius: 0.9rem;
       padding: 0.55rem 0.7rem 0.5rem;
       text-align: center;
+      cursor: pointer;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .speed-card:active {
+      background: var(--surface-2);
     }
 
     .speed-card .label {
@@ -149,6 +156,13 @@
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--muted);
+    }
+
+    .speed-card .label .tap-hint {
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      text-transform: none;
+      opacity: 0.75;
     }
 
     .speed-row {
@@ -424,27 +438,6 @@
       gap: 0.35rem;
     }
 
-    .stat-btn {
-      appearance: none;
-      width: 100%;
-      text-align: left;
-      font: inherit;
-      color: inherit;
-      background: rgba(61, 156, 245, 0.1);
-      border: 1px solid rgba(61, 156, 245, 0.35);
-      border-radius: 0.5rem;
-      padding: 0.3rem 0.35rem;
-      cursor: pointer;
-    }
-
-    .stat-btn .k { color: var(--accent); }
-    .stat-btn .v {
-      margin-top: 0.08rem;
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 0.78rem;
-      font-weight: 600;
-    }
-
     .tone-green { color: var(--green); }
     .tone-amber { color: var(--amber); }
     .tone-red { color: var(--red); }
@@ -464,8 +457,14 @@
         <span class="pill" id="pill-mount">—</span>
       </div>
 
-      <section class="speed-card" aria-label="Speed">
-        <div class="label">Speed</div>
+      <section
+        class="speed-card"
+        id="speed-card"
+        role="button"
+        tabindex="0"
+        aria-label="Speed. Tap to switch units"
+      >
+        <div class="label">Speed <span class="tap-hint">· tap units</span></div>
         <div class="speed-row">
           <div class="speed-value" id="speed">—</div>
           <div class="speed-unit" id="speed-unit">mph</div>
@@ -524,10 +523,7 @@
           <div class="stat"><div class="k">Peak drive</div><div class="v" id="peak-drive">0.00</div></div>
           <div class="stat"><div class="k">Bumps</div><div class="v" id="bumps">0</div></div>
           <div class="stat"><div class="k">Scored</div><div class="v" id="scored">0%</div></div>
-          <button type="button" class="stat-btn" id="btn-units" aria-label="Toggle speed units">
-            <div class="k">Units</div>
-            <div class="v" id="units-label">mph</div>
-          </button>
+          <div class="stat"><div class="k">Avg speed</div><div class="v" id="avg-speed">—</div></div>
         </div>
       </section>
 

@@ -32,7 +32,8 @@
   const el = {
     speed: document.getElementById("speed"),
     speedUnit: document.getElementById("speed-unit"),
-    unitsLabel: document.getElementById("units-label"),
+    speedCard: document.getElementById("speed-card"),
+    avgSpeed: document.getElementById("avg-speed"),
     val: {
       accel: document.getElementById("val-accel"),
       brake: document.getElementById("val-brake"),
@@ -71,13 +72,10 @@
     btnStart: document.getElementById("btn-start"),
     btnPause: document.getElementById("btn-pause"),
     btnReset: document.getElementById("btn-reset"),
-    btnUnits: document.getElementById("btn-units"),
   };
 
   function applyUnitsLabels() {
-    const u = useMph ? "mph" : "km/h";
-    el.speedUnit.textContent = u;
-    el.unitsLabel.textContent = u;
+    el.speedUnit.textContent = useMph ? "mph" : "km/h";
   }
   applyUnitsLabels();
 
@@ -179,6 +177,17 @@
     }
     const km = m / 1000;
     return `${km < 10 ? km.toFixed(2) : km.toFixed(1)} km`;
+  }
+
+  /** Overall trip average: distance / elapsed recording time. */
+  function formatAvgSpeed(distanceM, elapsedMs) {
+    if (!elapsedMs || elapsedMs < 1000 || distanceM < 5) return "—";
+    const mps = distanceM / (elapsedMs / 1000);
+    if (!Number.isFinite(mps) || mps < 0) return "—";
+    if (useMph) {
+      return `${(mps * 2.236936).toFixed(1)} mph`;
+    }
+    return `${(mps * 3.6).toFixed(1)} km/h`;
   }
 
   function tripRecording() {
@@ -486,6 +495,7 @@
     el.speed.textContent = formatSpeed(state.speedMps);
     el.time.textContent = formatTime(state.elapsedMs);
     el.dist.textContent = formatDist(state.distanceM);
+    el.avgSpeed.textContent = formatAvgSpeed(state.distanceM, state.elapsedMs);
     el.peakDrive.textContent = state.peakDriveG.toFixed(2);
     el.bumps.textContent = String(state.bumpCount);
 
@@ -764,6 +774,11 @@
     } catch (_) {}
     applyUnitsLabels();
     state.lastUi = {};
+    setHint(
+      useMph
+        ? "Units: <strong>mph</strong> / miles. Tap speed again for km/h."
+        : "Units: <strong>km/h</strong> / km. Tap speed again for mph."
+    );
   }
 
   document.addEventListener("visibilitychange", async () => {
@@ -779,7 +794,13 @@
   el.btnStart.addEventListener("click", () => toggleStart());
   el.btnPause.addEventListener("click", () => togglePause());
   el.btnReset.addEventListener("click", () => resetAll());
-  el.btnUnits.addEventListener("click", () => toggleUnits());
+  el.speedCard.addEventListener("click", () => toggleUnits());
+  el.speedCard.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleUnits();
+    }
+  });
 
   const fit = window.FitToScreen.create({
     stage: "fit-stage",
