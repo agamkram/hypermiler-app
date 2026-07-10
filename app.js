@@ -6,8 +6,7 @@
   "use strict";
 
   const G = 9.80665;
-  const BAR_MAX_G = 0.55;
-  const BUMP_BAR_MAX_G = 0.85;
+  const BAR_MAX_G = 2.0;
   const SMOOTH_ALPHA = 0.2;
   const GRAV_ALPHA = 0.04;
   const FWD_BLEND = 0.08;
@@ -419,16 +418,22 @@
   }
 
   function setPeakLine(node, g, maxG) {
+    const lbl = node.querySelector(".peak-lbl");
     if (g < 0.02) {
       node.style.opacity = "0";
+      if (lbl) lbl.textContent = "";
       return;
     }
     const pct = clamp((g / maxG) * 100, 0, 100);
+    const color = barColor(g);
     node.style.bottom = pct + "%";
     node.style.opacity = "1";
+    node.style.setProperty("--peak-color", color);
+    if (lbl) lbl.textContent = g.toFixed(2);
   }
 
-  function paintChannel(ch, g, maxG) {
+  function paintChannel(ch, g) {
+    const maxG = BAR_MAX_G;
     const key = `${ch}:${Math.round(g * 100)}:${Math.round(state.recent[ch] * 100)}:${Math.round(state.session[ch] * 100)}`;
     if (state.lastUi[ch] === key) return;
     state.lastUi[ch] = key;
@@ -445,10 +450,10 @@
     const now = performance.now();
     const live = state.live;
 
-    paintChannel("accel", live.accel, BAR_MAX_G);
-    paintChannel("brake", live.brake, BAR_MAX_G);
-    paintChannel("corner", live.corner, BAR_MAX_G);
-    paintChannel("bump", live.bump, BUMP_BAR_MAX_G);
+    paintChannel("accel", live.accel);
+    paintChannel("brake", live.brake);
+    paintChannel("corner", live.corner);
+    paintChannel("bump", live.bump);
 
     el.speed.textContent = formatSpeed(state.speedMps);
 
