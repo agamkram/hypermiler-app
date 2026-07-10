@@ -1,19 +1,19 @@
 # HyperMiler
 
-Phone-as-gauge for smoother driving. Live accel / brake / corner g-forces, GPS speed, and a trip smoothness score.
+Phone-as-gauge for smoother driving and fewer road hits.
 
-**Mount:** fixed, portrait, screen toward cabin. Tap **Start** once — no manual zeroing.
+- **Accel / Brake / Corner / Bump** live bars with dual peak holds (session + recent)
+- **Smooth score** — long/lat only, only while moving & docked (policy A)
+- **Bumps** — vertical-dominant impacts; separate from Smooth
+- **Auto orientation** — gravity + GPS learn forward axis (portrait, flat, mild tilt)
+- **Handheld gate** — phone fidget time is not scored
+
+**Mount:** fixed to the car (any angle). Tap **Start** once.
 
 ## Stack
 
-Static HTML/JS PWA · shared `fit-to-screen.js` · DeviceMotion + Geolocation · Screen Wake Lock
+Static HTML/JS PWA · `fit-to-screen.js` · DeviceMotion + Geolocation · Wake Lock
 
 ## Local
 
-Open `index.html` over HTTPS or localhost (sensors require a secure context).
-
-## Icons
-
-```bash
-python3 scripts/generate-icons.py
-```
+Open over HTTPS or localhost (secure context required for sensors).

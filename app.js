@@ -1,71 +1,152 @@
 /**
- * HyperMiler — live vehicle forces + trip smoothness score.
- * Portrait fixed mount. Motion sensors + GPS speed.
- * No manual Zero: linear accel when available, else continuous gravity LP.
+ * HyperMiler — live forces + bumps + smoothness (policy A).
+ * Auto orientation · handheld gate · score only while moving · dual peak holds.
  */
 (function () {
   "use strict";
 
   const G = 9.80665;
   const BAR_MAX_G = 0.55;
-  const SMOOTH_ALPHA = 0.18;
-  /** Slow gravity tracker when OS only gives accel+gravity (no user Zero). */
-  const GRAV_ALPHA = 0.025;
-  const HARSH_LONG_G = 0.22;
-  const HARSH_CORNER_G = 0.28;
-  const HARSH_COOLDOWN_MS = 1200;
-  const SCORE_HARSH_PENALTY = 4;
+  const BUMP_BAR_MAX_G = 0.85;
+  const SMOOTH_ALPHA = 0.2;
+  const GRAV_ALPHA = 0.04;
+  const FWD_BLEND = 0.08;
+  const MOVE_MPS = 1.2; // ~2.7 mph
+  const HANDHELD_HOLD_MS = 1600;
+  const GRAV_TILT_HANDHELD = 0.12; // ~7° change in unit grav · per sample blend
+  const BUMP_G = 0.32;
+  const BUMP_DOMINANCE = 1.15; // |vert| must beat long/lat
+  const BUMP_COOLDOWN_MS = 900;
   const SCORE_RMS_WEIGHT = 85;
+  const RECENT_HOLD_MS = 1100;
+  const RECENT_DECAY = 0.88;
   const USE_MPH = true;
+  const CHANS = ["accel", "brake", "corner", "bump"];
 
   const el = {
     speed: document.getElementById("speed"),
     speedUnit: document.getElementById("speed-unit"),
-    valAccel: document.getElementById("val-accel"),
-    valBrake: document.getElementById("val-brake"),
-    valCorner: document.getElementById("val-corner"),
-    barAccel: document.getElementById("bar-accel"),
-    barBrake: document.getElementById("bar-brake"),
-    barCorner: document.getElementById("bar-corner"),
+    val: {
+      accel: document.getElementById("val-accel"),
+      brake: document.getElementById("val-brake"),
+      corner: document.getElementById("val-corner"),
+      bump: document.getElementById("val-bump"),
+    },
+    bar: {
+      accel: document.getElementById("bar-accel"),
+      brake: document.getElementById("bar-brake"),
+      corner: document.getElementById("bar-corner"),
+      bump: document.getElementById("bar-bump"),
+    },
+    ps: {
+      accel: document.getElementById("ps-accel"),
+      brake: document.getElementById("ps-brake"),
+      corner: document.getElementById("ps-corner"),
+      bump: document.getElementById("ps-bump"),
+    },
+    pr: {
+      accel: document.getElementById("pr-accel"),
+      brake: document.getElementById("pr-brake"),
+      corner: document.getElementById("pr-corner"),
+      bump: document.getElementById("pr-bump"),
+    },
     score: document.getElementById("score"),
     scoreRing: document.getElementById("score-ring"),
     dist: document.getElementById("dist"),
     time: document.getElementById("time"),
-    peak: document.getElementById("peak"),
-    harsh: document.getElementById("harsh"),
+    peakDrive: document.getElementById("peak-drive"),
+    peakBump: document.getElementById("peak-bump"),
+    bumps: document.getElementById("bumps"),
+    scored: document.getElementById("scored"),
     hint: document.getElementById("hint"),
     pillMotion: document.getElementById("pill-motion"),
     pillGps: document.getElementById("pill-gps"),
+    pillMount: document.getElementById("pill-mount"),
     btnStart: document.getElementById("btn-start"),
     btnReset: document.getElementById("btn-reset"),
   };
 
   el.speedUnit.textContent = USE_MPH ? "mph" : "km/h";
 
+  function emptyPeaks() {
+    return { accel: 0, brake: 0, corner: 0, bump: 0 };
+  }
+
   const state = {
     running: false,
     motionOn: false,
     gpsOn: false,
-    grav: null,
-    smooth: { long: 0, lat: 0 },
     speedMps: null,
     lastGps: null,
+    lastSpeed: null,
+    lastSpeedT: 0,
+    grav: null,
+    prevGrav: null,
+    forward: null,
+    live: { accel: 0, brake: 0, corner: 0, bump: 0 },
+    smoothLong: 0,
+    smoothLat: 0,
+    smoothVert: 0,
+    recent: emptyPeaks(),
+    recentAt: emptyPeaks(),
+    session: emptyPeaks(),
+    handheldUntil: 0,
     tripStartedAt: 0,
     distanceM: 0,
-    peakG: 0,
-    harshCount: 0,
-    lastHarshAt: 0,
+    peakDriveG: 0,
+    peakBumpG: 0,
+    bumpCount: 0,
+    lastBumpAt: 0,
     sampleN: 0,
     sumSq: 0,
+    totalMotionN: 0,
+    scoredN: 0,
     wakeLock: null,
     geoWatchId: null,
     motionHandler: null,
     raf: 0,
-    lastUi: { a: -1, b: -1, c: -1, score: -1 },
+    lastUi: {},
   };
 
   function clamp(n, lo, hi) {
     return Math.max(lo, Math.min(hi, n));
+  }
+
+  function v3(x, y, z) {
+    return { x, y, z };
+  }
+
+  function vLen(v) {
+    return Math.hypot(v.x, v.y, v.z);
+  }
+
+  function vNorm(v) {
+    const L = vLen(v) || 1;
+    return v3(v.x / L, v.y / L, v.z / L);
+  }
+
+  function vDot(a, b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+  }
+
+  function vCross(a, b) {
+    return v3(
+      a.y * b.z - a.z * b.y,
+      a.z * b.x - a.x * b.z,
+      a.x * b.y - a.y * b.x
+    );
+  }
+
+  function vScale(v, s) {
+    return v3(v.x * s, v.y * s, v.z * s);
+  }
+
+  function vAdd(a, b) {
+    return v3(a.x + b.x, a.y + b.y, a.z + b.z);
+  }
+
+  function vSub(a, b) {
+    return v3(a.x - b.x, a.y - b.y, a.z - b.z);
   }
 
   function formatG(g) {
@@ -113,12 +194,24 @@
     return "var(--red)";
   }
 
+  function isMoving() {
+    return state.speedMps != null && state.speedMps > MOVE_MPS;
+  }
+
+  function isHandheld(now) {
+    return now < state.handheldUntil;
+  }
+
+  function isTrusted(now) {
+    return !isHandheld(now);
+  }
+
+  /** Policy A: long/lat RMS only, only while moving + docked. */
   function tripScore() {
     if (state.sampleN < 8) return 100;
     const rms = Math.sqrt(state.sumSq / state.sampleN);
-    const rmsPenalty = clamp(rms * SCORE_RMS_WEIGHT, 0, 55);
-    const harshPenalty = Math.min(40, state.harshCount * SCORE_HARSH_PENALTY);
-    return Math.round(clamp(100 - rmsPenalty - harshPenalty, 0, 100));
+    const rmsPenalty = clamp(rms * SCORE_RMS_WEIGHT, 0, 70);
+    return Math.round(clamp(100 - rmsPenalty, 0, 100));
   }
 
   function scoreTone(score) {
@@ -138,108 +231,224 @@
     return 2 * R * Math.asin(Math.sqrt(a));
   }
 
-  /**
-   * Portrait, screen toward cabin: +X right, +Y up, +Z toward driver.
-   * Forward vehicle accel → −Z. Positive long = accelerate, negative = brake.
-   */
-  function phoneToVehicle(ax, ay, az) {
-    return {
-      longG: -az / G,
-      latG: ax / G,
-      vertG: ay / G,
-    };
+  function defaultForward(down) {
+    // Prefer phone −Z projected onto horizontal (portrait cabin-facing guess).
+    const guess = v3(0, 0, -1);
+    let f = vSub(guess, vScale(down, vDot(guess, down)));
+    if (vLen(f) < 0.15) {
+      const guess2 = v3(0, 1, 0);
+      f = vSub(guess2, vScale(down, vDot(guess2, down)));
+    }
+    return vNorm(f);
   }
 
-  function readLinearAccel(event) {
+  function projectHorizontal(a, down) {
+    return vSub(a, vScale(down, vDot(a, down)));
+  }
+
+  function learnForward(aLin, down, gpsAccel, now) {
+    if (!state.forward) state.forward = defaultForward(down);
+
+    // Learn when GPS reports clear longitudinal accel and sample is trusted.
+    if (
+      gpsAccel != null &&
+      Math.abs(gpsAccel) > 0.55 &&
+      isTrusted(now) &&
+      isMoving()
+    ) {
+      let h = projectHorizontal(aLin, down);
+      if (gpsAccel < 0) h = vScale(h, -1);
+      if (vLen(h) > 0.4) {
+        h = vNorm(h);
+        state.forward = vNorm(
+          vAdd(vScale(state.forward, 1 - FWD_BLEND), vScale(h, FWD_BLEND))
+        );
+        // Keep forward ⟂ down
+        state.forward = vNorm(
+          vSub(state.forward, vScale(down, vDot(state.forward, down)))
+        );
+      }
+    } else if (vLen(state.forward) < 0.5) {
+      state.forward = defaultForward(down);
+    }
+  }
+
+  function vehicleGs(aLin, down, forward) {
+    const latAxis = vNorm(vCross(down, forward));
+    const longAxis = vNorm(vCross(latAxis, down)); // re-orthogonalize forward in plane
+    // long: + = accelerate; lat: + = left of vehicle; vert: + = up (bump impulse abs later)
+    const longG = vDot(aLin, longAxis) / G;
+    const latG = vDot(aLin, latAxis) / G;
+    const vertG = -vDot(aLin, down) / G;
+    return { longG, latG, vertG };
+  }
+
+  function markHandheld(now, reason) {
+    state.handheldUntil = Math.max(state.handheldUntil, now + HANDHELD_HOLD_MS);
+  }
+
+  function updateGrav(ag) {
+    const sample = v3(ag.x, ag.y, ag.z);
+    if (!state.grav) {
+      state.grav = sample;
+      state.prevGrav = sample;
+      return vNorm(sample);
+    }
+    state.prevGrav = state.grav;
+    state.grav = v3(
+      state.grav.x + GRAV_ALPHA * (sample.x - state.grav.x),
+      state.grav.y + GRAV_ALPHA * (sample.y - state.grav.y),
+      state.grav.z + GRAV_ALPHA * (sample.z - state.grav.z)
+    );
+    return vNorm(state.grav);
+  }
+
+  function checkHandheldFromGrav(now) {
+    if (!state.prevGrav || !state.grav) return;
+    const a = vNorm(state.prevGrav);
+    const b = vNorm(state.grav);
+    const diff = vLen(vSub(a, b));
+    if (diff > GRAV_TILT_HANDHELD) markHandheld(now, "tilt");
+  }
+
+  function readSensors(event) {
     const a = event.acceleration;
     const ag = event.accelerationIncludingGravity;
+    let aLin = null;
+    let down = null;
 
-    // Prefer OS linear accel (gravity already removed).
+    if (ag && ag.x != null) {
+      down = updateGrav(ag);
+      checkHandheldFromGrav(performance.now());
+    }
+
     if (a && a.x != null && a.y != null && a.z != null) {
-      return { x: a.x, y: a.y, z: a.z };
+      aLin = v3(a.x, a.y, a.z);
+    } else if (ag && ag.x != null && state.grav) {
+      aLin = vSub(v3(ag.x, ag.y, ag.z), state.grav);
     }
 
-    // Fallback: track gravity slowly and subtract.
-    if (ag && ag.x != null && ag.y != null && ag.z != null) {
-      if (!state.grav) {
-        state.grav = { x: ag.x, y: ag.y, z: ag.z };
-      } else {
-        state.grav.x += GRAV_ALPHA * (ag.x - state.grav.x);
-        state.grav.y += GRAV_ALPHA * (ag.y - state.grav.y);
-        state.grav.z += GRAV_ALPHA * (ag.z - state.grav.z);
+    if (!down && state.grav) down = vNorm(state.grav);
+    if (!down) down = v3(0, -1, 0); // fallback
+
+    return { aLin, down };
+  }
+
+  function updatePeaks(live, trusted, now) {
+    for (const ch of CHANS) {
+      const v = live[ch];
+      if (trusted && v >= state.recent[ch]) {
+        state.recent[ch] = v;
+        state.recentAt[ch] = now;
+      } else if (now - (state.recentAt[ch] || 0) > RECENT_HOLD_MS) {
+        state.recent[ch] = Math.max(v, state.recent[ch] * RECENT_DECAY);
+        if (state.recent[ch] < 0.02) state.recent[ch] = v;
       }
-      return {
-        x: ag.x - state.grav.x,
-        y: ag.y - state.grav.y,
-        z: ag.z - state.grav.z,
-      };
+      if (trusted && v > state.session[ch]) state.session[ch] = v;
     }
-
-    return null;
   }
 
   function onMotion(event) {
     if (!state.running) return;
-    const raw = readLinearAccel(event);
-    if (!raw) return;
-
-    const { longG, latG } = phoneToVehicle(raw.x, raw.y, raw.z);
-
-    state.smooth.long += SMOOTH_ALPHA * (longG - state.smooth.long);
-    state.smooth.lat += SMOOTH_ALPHA * (latG - state.smooth.lat);
-
-    const long = state.smooth.long;
-    const lat = state.smooth.lat;
-    const mag = Math.hypot(long, lat);
-
-    state.sampleN += 1;
-    state.sumSq += mag * mag;
-    if (mag > state.peakG) state.peakG = mag;
-
     const now = performance.now();
-    const harshLong = Math.abs(long) >= HARSH_LONG_G;
-    const harshLat = Math.abs(lat) >= HARSH_CORNER_G;
-    if ((harshLong || harshLat) && now - state.lastHarshAt > HARSH_COOLDOWN_MS) {
-      const moving = state.speedMps == null || state.speedMps > 1.2;
-      if (moving) {
-        state.harshCount += 1;
-        state.lastHarshAt = now;
-      }
+    const { aLin, down } = readSensors(event);
+    if (!aLin) return;
+
+    state.totalMotionN += 1;
+
+    // Extreme phone fling
+    if (vLen(aLin) / G > 2.2) markHandheld(now, "fling");
+
+    const gpsA =
+      state._gpsAccel != null && now - state._gpsAccelAt < 1500
+        ? state._gpsAccel
+        : null;
+
+    learnForward(aLin, down, gpsA, now);
+    const forward = state.forward || defaultForward(down);
+    const { longG, latG, vertG } = vehicleGs(aLin, down, forward);
+
+    state.smoothLong += SMOOTH_ALPHA * (longG - state.smoothLong);
+    state.smoothLat += SMOOTH_ALPHA * (latG - state.smoothLat);
+    state.smoothVert += SMOOTH_ALPHA * (vertG - state.smoothVert);
+
+    const long = state.smoothLong;
+    const lat = state.smoothLat;
+    const vertAbs = Math.abs(state.smoothVert);
+
+    const live = {
+      accel: Math.max(0, long),
+      brake: Math.max(0, -long),
+      corner: Math.abs(lat),
+      bump: vertAbs,
+    };
+    state.live = live;
+
+    const trusted = isTrusted(now);
+    updatePeaks(live, trusted, now);
+
+    if (trusted) {
+      const driveMag = Math.hypot(long, lat);
+      if (driveMag > state.peakDriveG) state.peakDriveG = driveMag;
+      if (vertAbs > state.peakBumpG) state.peakBumpG = vertAbs;
+    }
+
+    // Score samples: policy A — long/lat only, moving + docked
+    if (trusted && isMoving()) {
+      const driveMag = Math.hypot(long, lat);
+      state.sampleN += 1;
+      state.sumSq += driveMag * driveMag;
+      state.scoredN += 1;
+    }
+
+    // Bump events: vertical-dominant impulses while trusted
+    if (
+      trusted &&
+      vertAbs >= BUMP_G &&
+      vertAbs >= Math.abs(long) * BUMP_DOMINANCE &&
+      vertAbs >= Math.abs(lat) * BUMP_DOMINANCE &&
+      now - state.lastBumpAt > BUMP_COOLDOWN_MS
+    ) {
+      state.bumpCount += 1;
+      state.lastBumpAt = now;
     }
   }
 
+  function pctHeight(g, maxG) {
+    return `${clamp((g / maxG) * 100, 0, 100)}%`;
+  }
+
+  function setPeakLine(node, g, maxG) {
+    if (g < 0.02) {
+      node.style.opacity = "0";
+      return;
+    }
+    const pct = clamp((g / maxG) * 100, 0, 100);
+    node.style.bottom = pct + "%";
+    node.style.opacity = "1";
+  }
+
+  function paintChannel(ch, g, maxG) {
+    const key = `${ch}:${Math.round(g * 100)}:${Math.round(state.recent[ch] * 100)}:${Math.round(state.session[ch] * 100)}`;
+    if (state.lastUi[ch] === key) return;
+    state.lastUi[ch] = key;
+
+    el.val[ch].textContent = formatG(g);
+    el.val[ch].className = `g-value ${toneForG(g)}`;
+    el.bar[ch].style.height = pctHeight(g, maxG);
+    el.bar[ch].style.background = barColor(g);
+    setPeakLine(el.ps[ch], state.session[ch], maxG);
+    setPeakLine(el.pr[ch], state.recent[ch], maxG);
+  }
+
   function paint() {
-    const long = state.smooth.long;
-    const lat = state.smooth.lat;
-    const accel = Math.max(0, long);
-    const brake = Math.max(0, -long);
-    const corner = Math.abs(lat);
+    const now = performance.now();
+    const live = state.live;
 
-    const aKey = Math.round(accel * 100);
-    const bKey = Math.round(brake * 100);
-    const cKey = Math.round(corner * 100);
-
-    if (aKey !== state.lastUi.a) {
-      el.valAccel.textContent = formatG(accel);
-      el.valAccel.className = `g-value ${toneForG(accel)}`;
-      el.barAccel.style.height = `${clamp((accel / BAR_MAX_G) * 100, 0, 100)}%`;
-      el.barAccel.style.background = barColor(accel);
-      state.lastUi.a = aKey;
-    }
-    if (bKey !== state.lastUi.b) {
-      el.valBrake.textContent = formatG(brake);
-      el.valBrake.className = `g-value ${toneForG(brake)}`;
-      el.barBrake.style.height = `${clamp((brake / BAR_MAX_G) * 100, 0, 100)}%`;
-      el.barBrake.style.background = barColor(brake);
-      state.lastUi.b = bKey;
-    }
-    if (cKey !== state.lastUi.c) {
-      el.valCorner.textContent = formatG(corner);
-      el.valCorner.className = `g-value ${toneForG(corner)}`;
-      el.barCorner.style.height = `${clamp((corner / BAR_MAX_G) * 100, 0, 100)}%`;
-      el.barCorner.style.background = barColor(corner);
-      state.lastUi.c = cKey;
-    }
+    paintChannel("accel", live.accel, BAR_MAX_G);
+    paintChannel("brake", live.brake, BAR_MAX_G);
+    paintChannel("corner", live.corner, BAR_MAX_G);
+    paintChannel("bump", live.bump, BUMP_BAR_MAX_G);
 
     el.speed.textContent = formatSpeed(state.speedMps);
 
@@ -247,11 +456,24 @@
       el.time.textContent = formatTime(Date.now() - state.tripStartedAt);
     }
     el.dist.textContent = formatDist(state.distanceM);
-    el.peak.textContent = state.peakG.toFixed(2);
-    el.harsh.textContent = String(state.harshCount);
+    el.peakDrive.textContent = state.peakDriveG.toFixed(2);
+    el.peakBump.textContent = state.peakBumpG.toFixed(2);
+    el.bumps.textContent = String(state.bumpCount);
+
+    const scoredPct =
+      state.totalMotionN > 0
+        ? Math.round((state.scoredN / state.totalMotionN) * 100)
+        : 0;
+    el.scored.textContent = `${scoredPct}%`;
+
+    if (state.running) {
+      if (isHandheld(now)) setPill(el.pillMount, "Handheld", "warn");
+      else if (isMoving()) setPill(el.pillMount, "Driving", "on");
+      else setPill(el.pillMount, "Docked", "on");
+    }
 
     const score = tripScore();
-    if (score !== state.lastUi.score) {
+    if (state.lastUi.score !== score) {
       el.score.textContent = String(score);
       el.scoreRing.style.setProperty("--score-deg", `${(score / 100) * 360}deg`);
       el.scoreRing.style.background = `radial-gradient(circle at center, var(--surface) 58%, transparent 59%), conic-gradient(${scoreTone(score)} var(--score-deg), var(--surface-2) 0)`;
@@ -275,11 +497,11 @@
       try {
         const res = await DOM.requestPermission();
         if (res !== "granted") {
-          setHint("Motion permission denied. Enable motion for this site in Settings.");
+          setHint("Motion permission denied. Enable motion in Settings.");
           return false;
         }
       } catch (_) {
-        setHint("Could not request motion permission. Try again from a user tap.");
+        setHint("Could not request motion permission. Try again from a tap.");
         return false;
       }
     }
@@ -287,12 +509,11 @@
   }
 
   function startMotion() {
-    if (state.motionHandler) return true;
+    if (state.motionHandler) return;
     state.motionHandler = onMotion;
     window.addEventListener("devicemotion", state.motionHandler, { passive: true });
     state.motionOn = true;
     setPill(el.pillMotion, "Motion on", "on");
-    return true;
   }
 
   function stopMotion() {
@@ -318,9 +539,18 @@
 
         const { latitude, longitude, speed, accuracy } = pos.coords;
         const t = pos.timestamp;
+        const now = performance.now();
 
         if (speed != null && Number.isFinite(speed) && speed >= 0) {
+          if (state.speedMps != null && state.lastSpeedT) {
+            const dt = (now - state.lastSpeedT) / 1000;
+            if (dt > 0.2 && dt < 3) {
+              state._gpsAccel = (speed - state.speedMps) / dt;
+              state._gpsAccelAt = now;
+            }
+          }
           state.speedMps = speed;
+          state.lastSpeedT = now;
         }
 
         if (state.running && state.lastGps) {
@@ -344,14 +574,10 @@
         state.gpsOn = false;
         setPill(el.pillGps, "GPS off", "warn");
         if (err.code === 1) {
-          setHint("Location denied. Allow location for speed & distance.");
+          setHint("Location denied. Allow location for speed, distance, and auto-orient.");
         }
       },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 1000,
-        timeout: 12000,
-      }
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 12000 }
     );
   }
 
@@ -363,6 +589,7 @@
     state.gpsOn = false;
     state.speedMps = null;
     state.lastGps = null;
+    state._gpsAccel = null;
     setPill(el.pillGps, "GPS off", null);
   }
 
@@ -374,9 +601,7 @@
           state.wakeLock = null;
         });
       }
-    } catch (_) {
-      /* optional */
-    }
+    } catch (_) {}
   }
 
   async function releaseWakeLock() {
@@ -389,15 +614,26 @@
   function resetTripStats() {
     state.tripStartedAt = Date.now();
     state.distanceM = 0;
-    state.peakG = 0;
-    state.harshCount = 0;
-    state.lastHarshAt = 0;
+    state.peakDriveG = 0;
+    state.peakBumpG = 0;
+    state.bumpCount = 0;
+    state.lastBumpAt = 0;
     state.sampleN = 0;
     state.sumSq = 0;
-    state.smooth.long = 0;
-    state.smooth.lat = 0;
+    state.totalMotionN = 0;
+    state.scoredN = 0;
+    state.smoothLong = 0;
+    state.smoothLat = 0;
+    state.smoothVert = 0;
+    state.live = { accel: 0, brake: 0, corner: 0, bump: 0 };
+    state.recent = emptyPeaks();
+    state.recentAt = emptyPeaks();
+    state.session = emptyPeaks();
     state.grav = null;
-    state.lastUi.score = -1;
+    state.prevGrav = null;
+    state.forward = null;
+    state.handheldUntil = 0;
+    state.lastUi = {};
   }
 
   async function startSession() {
@@ -414,8 +650,8 @@
     el.btnStart.textContent = "Stop";
     el.btnStart.classList.add("running");
     el.btnReset.disabled = false;
-
-    setHint("Trip running. Keep phone <strong>fixed · portrait</strong> — no taps needed.");
+    setPill(el.pillMount, "Docked", "on");
+    setHint("Running. Fixed mount any angle · handheld time is not scored.");
   }
 
   async function stopSession() {
@@ -427,9 +663,10 @@
     el.btnStart.textContent = "Start";
     el.btnStart.classList.remove("running");
     el.btnReset.disabled = false;
+    setPill(el.pillMount, "—", null);
 
     setHint(
-      `Trip paused. Score <strong>${tripScore()}</strong> · peak <strong>${state.peakG.toFixed(2)}g</strong> · harsh <strong>${state.harshCount}</strong>.`
+      `Paused · Smooth <strong>${tripScore()}</strong> · drive peak <strong>${state.peakDriveG.toFixed(2)}g</strong> · bumps <strong>${state.bumpCount}</strong>.`
     );
   }
 
@@ -441,9 +678,9 @@
   function resetAll() {
     resetTripStats();
     if (state.running) {
-      setHint("Trip reset. Drive on — no zeroing.");
+      setHint("Trip reset. Drive on.");
     } else {
-      setHint("Mount phone <strong>fixed · portrait</strong>, then Start. Drive hands-off.");
+      setHint("Mount fixed (any angle). Tap <strong>Start</strong> — Smooth = driving only; bumps separate.");
     }
   }
 
@@ -453,18 +690,14 @@
     }
   });
 
-  el.btnStart.addEventListener("click", () => {
-    toggleStart();
-  });
-  el.btnReset.addEventListener("click", () => {
-    resetAll();
-  });
+  el.btnStart.addEventListener("click", () => toggleStart());
+  el.btnReset.addEventListener("click", () => resetAll());
 
   const fit = window.FitToScreen.create({
     stage: "fit-stage",
     app: "app",
     phoneMaxWidth: 767,
-    wideAppWidth: 380,
+    wideAppWidth: 400,
     capScaleAtOne: true,
   });
   fit.bindViewportListeners();
