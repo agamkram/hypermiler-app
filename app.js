@@ -161,7 +161,7 @@
   }
 
   function formatG(g) {
-    return `${g.toFixed(2)}g`;
+    return `${g.toFixed(1)}g`;
   }
 
   function formatSpeed(mps) {
@@ -465,7 +465,7 @@
     node.style.bottom = pct + "%";
     node.style.opacity = "1";
     node.style.setProperty("--peak-color", color);
-    if (lbl) lbl.textContent = g.toFixed(2);
+    if (lbl) lbl.textContent = g.toFixed(1);
   }
 
   function paintChannel(ch, g) {
@@ -496,7 +496,7 @@
     el.time.textContent = formatTime(state.elapsedMs);
     el.dist.textContent = formatDist(state.distanceM);
     el.avgSpeed.textContent = formatAvgSpeed(state.distanceM, state.elapsedMs);
-    el.peakDrive.textContent = state.peakDriveG.toFixed(2);
+    el.peakDrive.textContent = state.peakDriveG.toFixed(1);
     el.bumps.textContent = String(state.bumpCount);
 
     const scoredPct =
@@ -729,7 +729,7 @@
     setPill(el.pillMount, "—", null);
 
     setHint(
-      `Stopped · Smooth <strong>${tripScore()}</strong> · drive peak <strong>${state.peakDriveG.toFixed(2)}g</strong> · bumps <strong>${state.bumpCount}</strong>.`
+      `Stopped · Smooth <strong>${tripScore()}</strong> · drive peak <strong>${state.peakDriveG.toFixed(1)}g</strong> · bumps <strong>${state.bumpCount}</strong>.`
     );
   }
 
