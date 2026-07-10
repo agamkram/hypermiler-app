@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+  />
+  <meta name="theme-color" content="#0a0e14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="HyperMiler" />
+  <meta
+    name="description"
+    content="Live g-forces and trip smoothness score for calmer driving, less wear, better MPG."
+  />
+  <title>HyperMiler</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="apple-touch-icon.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0e14;
+      --surface: #121a24;
+      --surface-2: #1a2533;
+      --text: #e8edf4;
+      --muted: #7d8fa3;
+      --accent: #3d9cf5;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --border: rgba(255, 255, 255, 0.08);
+      --app-gap: 0.45rem;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      max-height: 100dvh;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "DM Sans", system-ui, sans-serif;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    .fit-stage {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding:
+        max(0.25rem, env(safe-area-inset-top))
+        max(0.4rem, env(safe-area-inset-right))
+        max(0.25rem, env(safe-area-inset-bottom))
+        max(0.4rem, env(safe-area-inset-left));
+    }
+
+    .app {
+      position: relative;
+      flex-shrink: 0;
+      width: min(22.5rem, 100%);
+      box-sizing: border-box;
+      padding: 0.55rem 0.65rem 0.65rem;
+      display: flex;
+      flex-direction: column;
+      gap: var(--app-gap);
+      transform: scale(1);
+      transform-origin: center center;
+      will-change: transform;
+    }
+
+    .app:not(.is-fitted) { visibility: hidden; }
+
+    header {
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    header .sub {
+      margin-top: 0.15rem;
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    .status {
+      display: flex;
+      justify-content: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      min-height: 1.1rem;
+    }
+
+    .pill {
+      font-size: 0.58rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.18rem 0.45rem;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .pill.on {
+      color: var(--green);
+      border-color: rgba(52, 211, 153, 0.35);
+      background: rgba(52, 211, 153, 0.1);
+    }
+
+    .pill.warn {
+      color: var(--amber);
+      border-color: rgba(251, 191, 36, 0.35);
+      background: rgba(251, 191, 36, 0.1);
+    }
+
+    .speed-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 0.7rem 0.8rem 0.65rem;
+      text-align: center;
+    }
+
+    .speed-card .label {
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .speed-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.35rem;
+      margin-top: 0.1rem;
+    }
+
+    .speed-value {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 3.1rem;
+      font-weight: 600;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .speed-unit {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .gauges {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.4rem;
+    }
+
+    .gauge {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.85rem;
+      padding: 0.5rem 0.4rem 0.55rem;
+      text-align: center;
+      min-height: 6.4rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .gauge .g-label {
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .gauge .g-value {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 1.05rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .bar-track {
+      flex: 1;
+      width: 1.15rem;
+      min-height: 3.4rem;
+      background: var(--surface-2);
+      border-radius: 999px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .bar-fill {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 0%;
+      border-radius: 999px;
+      background: var(--green);
+      transition: height 60ms linear, background-color 80ms linear;
+    }
+
+    .score-card {
+      background: linear-gradient(160deg, #121a24 0%, #152032 100%);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 0.65rem 0.75rem 0.7rem;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .score-ring {
+      width: 5.2rem;
+      height: 5.2rem;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, var(--surface) 58%, transparent 59%),
+        conic-gradient(var(--green) var(--score-deg, 0deg), var(--surface-2) 0);
+    }
+
+    .score-inner {
+      text-align: center;
+    }
+
+    .score-num {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 1.65rem;
+      font-weight: 600;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .score-lbl {
+      margin-top: 0.15rem;
+      font-size: 0.55rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .score-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.35rem 0.5rem;
+    }
+
+    .stat {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 0.55rem;
+      padding: 0.35rem 0.4rem;
+    }
+
+    .stat .k {
+      font-size: 0.52rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .stat .v {
+      margin-top: 0.1rem;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hint {
+      text-align: center;
+      font-size: 0.62rem;
+      line-height: 1.35;
+      color: var(--muted);
+      min-height: 1.7rem;
+      padding: 0 0.2rem;
+    }
+
+    .hint strong { color: var(--text); font-weight: 600; }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr 1fr;
+      gap: 0.4rem;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      border-radius: 0.75rem;
+      padding: 0.72rem 0.4rem;
+      cursor: pointer;
+    }
+
+    button:active { transform: scale(0.98); }
+
+    button.primary {
+      background: var(--accent);
+      border-color: transparent;
+      color: #041018;
+    }
+
+    button.primary.running {
+      background: #1f3a52;
+      color: var(--text);
+      border-color: rgba(61, 156, 245, 0.35);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .tone-green { color: var(--green); }
+    .tone-amber { color: var(--amber); }
+    .tone-red { color: var(--red); }
+  </style>
+</head>
+<body>
+  <div class="fit-stage" id="fit-stage">
+    <main class="app" id="app">
+      <header>
+        <h1>HyperMiler</h1>
+        <p class="sub">Smooth forces · less wear · better MPG</p>
+      </header>
+
+      <div class="status" aria-live="polite">
+        <span class="pill" id="pill-motion">Motion off</span>
+        <span class="pill" id="pill-gps">GPS off</span>
+        <span class="pill" id="pill-zero">Not zeroed</span>
+      </div>
+
+      <section class="speed-card" aria-label="Speed">
+        <div class="label">Speed</div>
+        <div class="speed-row">
+          <div class="speed-value" id="speed">—</div>
+          <div class="speed-unit" id="speed-unit">mph</div>
+        </div>
+      </section>
+
+      <section class="gauges" aria-label="Live forces">
+        <div class="gauge">
+          <div class="g-label">Accel</div>
+          <div class="bar-track" aria-hidden="true"><div class="bar-fill" id="bar-accel"></div></div>
+          <div class="g-value" id="val-accel">0.00g</div>
+        </div>
+        <div class="gauge">
+          <div class="g-label">Brake</div>
+          <div class="bar-track" aria-hidden="true"><div class="bar-fill" id="bar-brake"></div></div>
+          <div class="g-value" id="val-brake">0.00g</div>
+        </div>
+        <div class="gauge">
+          <div class="g-label">Corner</div>
+          <div class="bar-track" aria-hidden="true"><div class="bar-fill" id="bar-corner"></div></div>
+          <div class="g-value" id="val-corner">0.00g</div>
+        </div>
+      </section>
+
+      <section class="score-card" aria-label="Trip score">
+        <div class="score-ring" id="score-ring">
+          <div class="score-inner">
+            <div class="score-num" id="score">100</div>
+            <div class="score-lbl">Smooth</div>
+          </div>
+        </div>
+        <div class="score-meta">
+          <div class="stat"><div class="k">Distance</div><div class="v" id="dist">0.0 mi</div></div>
+          <div class="stat"><div class="k">Trip time</div><div class="v" id="time">0:00</div></div>
+          <div class="stat"><div class="k">Peak g</div><div class="v" id="peak">0.00</div></div>
+          <div class="stat"><div class="k">Harsh</div><div class="v" id="harsh">0</div></div>
+        </div>
+      </section>
+
+      <p class="hint" id="hint">
+        Mount phone <strong>fixed · portrait</strong>. Tap <strong>Start</strong>, then <strong>Zero</strong> while stopped.
+      </p>
+
+      <div class="actions">
+        <button type="button" class="primary" id="btn-start">Start</button>
+        <button type="button" id="btn-zero" disabled>Zero</button>
+        <button type="button" id="btn-reset" disabled>Reset</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="fit-to-screen.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
