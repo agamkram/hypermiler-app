@@ -19,12 +19,20 @@
   const SCORE_RMS_WEIGHT = 85;
   const RECENT_HOLD_MS = 1100;
   const RECENT_DECAY = 0.88;
-  const USE_MPH = true;
+  const UNITS_KEY = "hypermiler-units";
   const CHANS = ["accel", "brake", "corner", "bump"];
+
+  let useMph = true;
+  try {
+    const saved = localStorage.getItem(UNITS_KEY);
+    if (saved === "kmh") useMph = false;
+    if (saved === "mph") useMph = true;
+  } catch (_) {}
 
   const el = {
     speed: document.getElementById("speed"),
     speedUnit: document.getElementById("speed-unit"),
+    unitsLabel: document.getElementById("units-label"),
     val: {
       accel: document.getElementById("val-accel"),
       brake: document.getElementById("val-brake"),
@@ -54,7 +62,6 @@
     dist: document.getElementById("dist"),
     time: document.getElementById("time"),
     peakDrive: document.getElementById("peak-drive"),
-    peakBump: document.getElementById("peak-bump"),
     bumps: document.getElementById("bumps"),
     scored: document.getElementById("scored"),
     hint: document.getElementById("hint"),
@@ -62,10 +69,17 @@
     pillGps: document.getElementById("pill-gps"),
     pillMount: document.getElementById("pill-mount"),
     btnStart: document.getElementById("btn-start"),
+    btnPause: document.getElementById("btn-pause"),
     btnReset: document.getElementById("btn-reset"),
+    btnUnits: document.getElementById("btn-units"),
   };
 
-  el.speedUnit.textContent = USE_MPH ? "mph" : "km/h";
+  function applyUnitsLabels() {
+    const u = useMph ? "mph" : "km/h";
+    el.speedUnit.textContent = u;
+    el.unitsLabel.textContent = u;
+  }
+  applyUnitsLabels();
 
   function emptyPeaks() {
     return { accel: 0, brake: 0, corner: 0, bump: 0 };
@@ -73,11 +87,11 @@
 
   const state = {
     running: false,
+    paused: false,
     motionOn: false,
     gpsOn: false,
     speedMps: null,
     lastGps: null,
-    lastSpeed: null,
     lastSpeedT: 0,
     grav: null,
     prevGrav: null,
@@ -90,10 +104,10 @@
     recentAt: emptyPeaks(),
     session: emptyPeaks(),
     handheldUntil: 0,
-    tripStartedAt: 0,
+    elapsedMs: 0,
+    elapsedTickAt: 0,
     distanceM: 0,
     peakDriveG: 0,
-    peakBumpG: 0,
     bumpCount: 0,
     lastBumpAt: 0,
     sampleN: 0,
@@ -154,17 +168,28 @@
 
   function formatSpeed(mps) {
     if (mps == null || !Number.isFinite(mps) || mps < 0) return "—";
-    const v = USE_MPH ? mps * 2.236936 : mps * 3.6;
+    const v = useMph ? mps * 2.236936 : mps * 3.6;
     return Math.round(v).toString();
   }
 
   function formatDist(m) {
-    if (USE_MPH) {
+    if (useMph) {
       const mi = m / 1609.344;
       return `${mi < 10 ? mi.toFixed(2) : mi.toFixed(1)} mi`;
     }
     const km = m / 1000;
     return `${km < 10 ? km.toFixed(2) : km.toFixed(1)} km`;
+  }
+
+  function tripRecording() {
+    return state.running && !state.paused;
+  }
+
+  function syncElapsed(now) {
+    if (tripRecording() && state.elapsedTickAt) {
+      state.elapsedMs += now - state.elapsedTickAt;
+    }
+    state.elapsedTickAt = tripRecording() ? now : 0;
   }
 
   function formatTime(ms) {
@@ -353,8 +378,6 @@
     const { aLin, down } = readSensors(event);
     if (!aLin) return;
 
-    state.totalMotionN += 1;
-
     // Extreme phone fling
     if (vLen(aLin) / G > 2.2) markHandheld(now, "fling");
 
@@ -383,13 +406,17 @@
     };
     state.live = live;
 
+    // Live gauges always update; trip metrics only while recording
+    if (!tripRecording()) return;
+
+    state.totalMotionN += 1;
+
     const trusted = isTrusted(now);
     updatePeaks(live, trusted, now);
 
     if (trusted) {
       const driveMag = Math.hypot(long, lat);
       if (driveMag > state.peakDriveG) state.peakDriveG = driveMag;
-      if (vertAbs > state.peakBumpG) state.peakBumpG = vertAbs;
     }
 
     // Score samples: policy A — long/lat only, moving + docked
@@ -448,6 +475,7 @@
 
   function paint() {
     const now = performance.now();
+    syncElapsed(now);
     const live = state.live;
 
     paintChannel("accel", live.accel);
@@ -456,13 +484,9 @@
     paintChannel("bump", live.bump);
 
     el.speed.textContent = formatSpeed(state.speedMps);
-
-    if (state.running && state.tripStartedAt) {
-      el.time.textContent = formatTime(Date.now() - state.tripStartedAt);
-    }
+    el.time.textContent = formatTime(state.elapsedMs);
     el.dist.textContent = formatDist(state.distanceM);
     el.peakDrive.textContent = state.peakDriveG.toFixed(2);
-    el.peakBump.textContent = state.peakBumpG.toFixed(2);
     el.bumps.textContent = String(state.bumpCount);
 
     const scoredPct =
@@ -472,7 +496,8 @@
     el.scored.textContent = `${scoredPct}%`;
 
     if (state.running) {
-      if (isHandheld(now)) setPill(el.pillMount, "Handheld", "warn");
+      if (state.paused) setPill(el.pillMount, "Paused", "warn");
+      else if (isHandheld(now)) setPill(el.pillMount, "Handheld", "warn");
       else if (isMoving()) setPill(el.pillMount, "Driving", "on");
       else setPill(el.pillMount, "Docked", "on");
     }
@@ -558,7 +583,7 @@
           state.lastSpeedT = now;
         }
 
-        if (state.running && state.lastGps) {
+        if (tripRecording() && state.lastGps) {
           const dt = (t - state.lastGps.t) / 1000;
           if (dt > 0 && dt < 8 && accuracy != null && accuracy < 45) {
             const d = haversineM(
@@ -617,10 +642,10 @@
   }
 
   function resetTripStats() {
-    state.tripStartedAt = Date.now();
+    state.elapsedMs = 0;
+    state.elapsedTickAt = tripRecording() ? performance.now() : 0;
     state.distanceM = 0;
     state.peakDriveG = 0;
-    state.peakBumpG = 0;
     state.bumpCount = 0;
     state.lastBumpAt = 0;
     state.sampleN = 0;
@@ -641,6 +666,23 @@
     state.lastUi = {};
   }
 
+  function setPauseUi() {
+    if (!state.running) {
+      el.btnPause.textContent = "Pause";
+      el.btnPause.classList.remove("paused-btn");
+      el.btnPause.disabled = true;
+      return;
+    }
+    el.btnPause.disabled = false;
+    if (state.paused) {
+      el.btnPause.textContent = "Resume";
+      el.btnPause.classList.add("paused-btn");
+    } else {
+      el.btnPause.textContent = "Pause";
+      el.btnPause.classList.remove("paused-btn");
+    }
+  }
+
   async function startSession() {
     const ok = await requestMotionPermission();
     if (!ok) return;
@@ -650,17 +692,22 @@
     await requestWakeLock();
 
     state.running = true;
+    state.paused = false;
     resetTripStats();
+    state.elapsedTickAt = performance.now();
 
     el.btnStart.textContent = "Stop";
     el.btnStart.classList.add("running");
     el.btnReset.disabled = false;
+    setPauseUi();
     setPill(el.pillMount, "Docked", "on");
     setHint("Running. Fixed mount any angle · handheld time is not scored.");
   }
 
   async function stopSession() {
+    syncElapsed(performance.now());
     state.running = false;
+    state.paused = false;
     stopMotion();
     stopGps();
     await releaseWakeLock();
@@ -668,11 +715,28 @@
     el.btnStart.textContent = "Start";
     el.btnStart.classList.remove("running");
     el.btnReset.disabled = false;
+    setPauseUi();
     setPill(el.pillMount, "—", null);
 
     setHint(
-      `Paused · Smooth <strong>${tripScore()}</strong> · drive peak <strong>${state.peakDriveG.toFixed(2)}g</strong> · bumps <strong>${state.bumpCount}</strong>.`
+      `Stopped · Smooth <strong>${tripScore()}</strong> · drive peak <strong>${state.peakDriveG.toFixed(2)}g</strong> · bumps <strong>${state.bumpCount}</strong>.`
     );
+  }
+
+  function togglePause() {
+    if (!state.running) return;
+    const now = performance.now();
+    if (state.paused) {
+      state.paused = false;
+      state.elapsedTickAt = now;
+      setHint("Resumed. Trip recording on.");
+    } else {
+      syncElapsed(now);
+      state.paused = true;
+      state.elapsedTickAt = 0;
+      setHint("Paused. Live gauges still move · trip stats frozen.");
+    }
+    setPauseUi();
   }
 
   async function toggleStart() {
@@ -681,22 +745,41 @@
   }
 
   function resetAll() {
+    const wasPaused = state.paused;
     resetTripStats();
+    if (state.running && !wasPaused) {
+      state.elapsedTickAt = performance.now();
+    }
     if (state.running) {
-      setHint("Trip reset. Drive on.");
+      setHint(state.paused ? "Trip reset (still paused)." : "Trip reset. Drive on.");
     } else {
       setHint("Mount fixed (any angle). Tap <strong>Start</strong> — Smooth = driving only; bumps separate.");
     }
   }
 
+  function toggleUnits() {
+    useMph = !useMph;
+    try {
+      localStorage.setItem(UNITS_KEY, useMph ? "mph" : "kmh");
+    } catch (_) {}
+    applyUnitsLabels();
+    state.lastUi = {};
+  }
+
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState === "visible" && state.running) {
       await requestWakeLock();
+      if (tripRecording()) state.elapsedTickAt = performance.now();
+    } else if (document.visibilityState === "hidden" && tripRecording()) {
+      syncElapsed(performance.now());
+      state.elapsedTickAt = 0;
     }
   });
 
   el.btnStart.addEventListener("click", () => toggleStart());
+  el.btnPause.addEventListener("click", () => togglePause());
   el.btnReset.addEventListener("click", () => resetAll());
+  el.btnUnits.addEventListener("click", () => toggleUnits());
 
   const fit = window.FitToScreen.create({
     stage: "fit-stage",

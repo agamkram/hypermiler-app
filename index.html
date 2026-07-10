@@ -381,12 +381,6 @@
 
     .hint strong { color: var(--text); font-weight: 600; }
 
-    .actions {
-      display: grid;
-      grid-template-columns: 1.6fr 1fr;
-      gap: 0.4rem;
-    }
-
     button {
       appearance: none;
       border: 1px solid var(--border);
@@ -414,9 +408,41 @@
       border-color: rgba(61, 156, 245, 0.35);
     }
 
+    button.paused-btn {
+      border-color: rgba(251, 191, 36, 0.45);
+      color: var(--amber);
+    }
+
     button:disabled {
       opacity: 0.45;
       cursor: not-allowed;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 0.35rem;
+    }
+
+    .stat-btn {
+      appearance: none;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      color: inherit;
+      background: rgba(61, 156, 245, 0.1);
+      border: 1px solid rgba(61, 156, 245, 0.35);
+      border-radius: 0.5rem;
+      padding: 0.3rem 0.35rem;
+      cursor: pointer;
+    }
+
+    .stat-btn .k { color: var(--accent); }
+    .stat-btn .v {
+      margin-top: 0.08rem;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.78rem;
+      font-weight: 600;
     }
 
     .tone-green { color: var(--green); }
@@ -496,7 +522,10 @@
           <div class="stat"><div class="k">Distance</div><div class="v" id="dist">0.0 mi</div></div>
           <div class="stat"><div class="k">Trip time</div><div class="v" id="time">0:00</div></div>
           <div class="stat"><div class="k">Peak drive</div><div class="v" id="peak-drive">0.00</div></div>
-          <div class="stat"><div class="k">Peak bump</div><div class="v" id="peak-bump">0.00</div></div>
+          <button type="button" class="stat-btn" id="btn-units" aria-label="Toggle speed units">
+            <div class="k">Units</div>
+            <div class="v" id="units-label">mph</div>
+          </button>
           <div class="stat"><div class="k">Bumps</div><div class="v" id="bumps">0</div></div>
           <div class="stat"><div class="k">Scored</div><div class="v" id="scored">0%</div></div>
         </div>
@@ -508,6 +537,7 @@
 
       <div class="actions">
         <button type="button" class="primary" id="btn-start">Start</button>
+        <button type="button" id="btn-pause" disabled>Pause</button>
         <button type="button" id="btn-reset" disabled>Reset</button>
       </div>
     </main>
