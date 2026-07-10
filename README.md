@@ -2,7 +2,7 @@
 
 Phone-as-gauge for smoother driving. Live accel / brake / corner g-forces, GPS speed, and a trip smoothness score.
 
-**Mount:** fixed, portrait, screen toward cabin. Tap **Start**, then **Zero** while stopped.
+**Mount:** fixed, portrait, screen toward cabin. Tap **Start** once — no manual zeroing.
 
 ## Stack
 

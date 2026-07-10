@@ -318,7 +318,7 @@
 
     .actions {
       display: grid;
-      grid-template-columns: 1.3fr 1fr 1fr;
+      grid-template-columns: 1.6fr 1fr;
       gap: 0.4rem;
     }
 
@@ -370,7 +370,6 @@
       <div class="status" aria-live="polite">
         <span class="pill" id="pill-motion">Motion off</span>
         <span class="pill" id="pill-gps">GPS off</span>
-        <span class="pill" id="pill-zero">Not zeroed</span>
       </div>
 
       <section class="speed-card" aria-label="Speed">
@@ -415,12 +414,11 @@
       </section>
 
       <p class="hint" id="hint">
-        Mount phone <strong>fixed · portrait</strong>. Tap <strong>Start</strong>, then <strong>Zero</strong> while stopped.
+        Mount phone <strong>fixed · portrait</strong>. Tap <strong>Start</strong> once — no zeroing, no stop taps.
       </p>
 
       <div class="actions">
         <button type="button" class="primary" id="btn-start">Start</button>
-        <button type="button" id="btn-zero" disabled>Zero</button>
         <button type="button" id="btn-reset" disabled>Reset</button>
       </div>
     </main>

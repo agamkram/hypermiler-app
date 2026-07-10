@@ -1,6 +1,7 @@
 /**
  * HyperMiler — live vehicle forces + trip smoothness score.
  * Portrait fixed mount. Motion sensors + GPS speed.
+ * No manual Zero: linear accel when available, else continuous gravity LP.
  */
 (function () {
   "use strict";
@@ -8,7 +9,8 @@
   const G = 9.80665;
   const BAR_MAX_G = 0.55;
   const SMOOTH_ALPHA = 0.18;
-  const ZERO_SAMPLES = 28;
+  /** Slow gravity tracker when OS only gives accel+gravity (no user Zero). */
+  const GRAV_ALPHA = 0.025;
   const HARSH_LONG_G = 0.22;
   const HARSH_CORNER_G = 0.28;
   const HARSH_COOLDOWN_MS = 1200;
@@ -34,9 +36,7 @@
     hint: document.getElementById("hint"),
     pillMotion: document.getElementById("pill-motion"),
     pillGps: document.getElementById("pill-gps"),
-    pillZero: document.getElementById("pill-zero"),
     btnStart: document.getElementById("btn-start"),
-    btnZero: document.getElementById("btn-zero"),
     btnReset: document.getElementById("btn-reset"),
   };
 
@@ -46,10 +46,7 @@
     running: false,
     motionOn: false,
     gpsOn: false,
-    zeroed: false,
-    zeroing: false,
-    zeroBuf: [],
-    bias: { x: 0, y: 0, z: 0 },
+    grav: null,
     smooth: { long: 0, lat: 0 },
     speedMps: null,
     lastGps: null,
@@ -146,42 +143,46 @@
    * Forward vehicle accel → −Z. Positive long = accelerate, negative = brake.
    */
   function phoneToVehicle(ax, ay, az) {
-    const x = ax - state.bias.x;
-    const y = ay - state.bias.y;
-    const z = az - state.bias.z;
     return {
-      longG: -z / G,
-      latG: x / G,
-      vertG: y / G,
+      longG: -az / G,
+      latG: ax / G,
+      vertG: ay / G,
     };
   }
 
-  function readAccel(event) {
+  function readLinearAccel(event) {
     const a = event.acceleration;
     const ag = event.accelerationIncludingGravity;
+
+    // Prefer OS linear accel (gravity already removed).
     if (a && a.x != null && a.y != null && a.z != null) {
-      return { x: a.x, y: a.y, z: a.z, includesGravity: false };
+      return { x: a.x, y: a.y, z: a.z };
     }
+
+    // Fallback: track gravity slowly and subtract.
     if (ag && ag.x != null && ag.y != null && ag.z != null) {
-      return { x: ag.x, y: ag.y, z: ag.z, includesGravity: true };
+      if (!state.grav) {
+        state.grav = { x: ag.x, y: ag.y, z: ag.z };
+      } else {
+        state.grav.x += GRAV_ALPHA * (ag.x - state.grav.x);
+        state.grav.y += GRAV_ALPHA * (ag.y - state.grav.y);
+        state.grav.z += GRAV_ALPHA * (ag.z - state.grav.z);
+      }
+      return {
+        x: ag.x - state.grav.x,
+        y: ag.y - state.grav.y,
+        z: ag.z - state.grav.z,
+      };
     }
+
     return null;
   }
 
   function onMotion(event) {
     if (!state.running) return;
-    const raw = readAccel(event);
+    const raw = readLinearAccel(event);
     if (!raw) return;
 
-    if (state.zeroing) {
-      state.zeroBuf.push(raw);
-      if (state.zeroBuf.length >= ZERO_SAMPLES) {
-        finishZero();
-      }
-      return;
-    }
-
-    // If no linear accel API, gravity still present until Zero subtracts rest frame.
     const { longG, latG } = phoneToVehicle(raw.x, raw.y, raw.z);
 
     state.smooth.long += SMOOTH_ALPHA * (longG - state.smooth.long);
@@ -199,7 +200,6 @@
     const harshLong = Math.abs(long) >= HARSH_LONG_G;
     const harshLat = Math.abs(lat) >= HARSH_CORNER_G;
     if ((harshLong || harshLat) && now - state.lastHarshAt > HARSH_COOLDOWN_MS) {
-      // Ignore near-zero speed jitter as "harsh" when GPS says stopped.
       const moving = state.speedMps == null || state.speedMps > 1.2;
       if (moving) {
         state.harshCount += 1;
@@ -332,7 +332,6 @@
               latitude,
               longitude
             );
-            // Drop GPS jumps; require some motion for distance.
             if (d < 80 && (state.speedMps == null || state.speedMps > 0.8)) {
               state.distanceM += d;
             }
@@ -387,36 +386,6 @@
     state.wakeLock = null;
   }
 
-  function finishZero() {
-    const n = state.zeroBuf.length;
-    let sx = 0;
-    let sy = 0;
-    let sz = 0;
-    for (const s of state.zeroBuf) {
-      sx += s.x;
-      sy += s.y;
-      sz += s.z;
-    }
-    state.bias = { x: sx / n, y: sy / n, z: sz / n };
-    state.zeroBuf = [];
-    state.zeroing = false;
-    state.zeroed = true;
-    state.smooth.long = 0;
-    state.smooth.lat = 0;
-    setPill(el.pillZero, "Zeroed", "on");
-    setHint("Zeroed at rest. Drive smooth — green bars, high score.");
-    el.btnZero.disabled = false;
-  }
-
-  function startZero() {
-    if (!state.running || !state.motionOn) return;
-    state.zeroing = true;
-    state.zeroBuf = [];
-    el.btnZero.disabled = true;
-    setPill(el.pillZero, "Zeroing…", "warn");
-    setHint("Hold still… capturing rest frame.");
-  }
-
   function resetTripStats() {
     state.tripStartedAt = Date.now();
     state.distanceM = 0;
@@ -427,6 +396,7 @@
     state.sumSq = 0;
     state.smooth.long = 0;
     state.smooth.lat = 0;
+    state.grav = null;
     state.lastUi.score = -1;
   }
 
@@ -443,27 +413,19 @@
 
     el.btnStart.textContent = "Stop";
     el.btnStart.classList.add("running");
-    el.btnZero.disabled = false;
     el.btnReset.disabled = false;
 
-    setHint(
-      state.zeroed
-        ? "Trip running. Keep phone fixed · portrait."
-        : "Trip running. Tap <strong>Zero</strong> while stopped for accurate g."
-    );
+    setHint("Trip running. Keep phone <strong>fixed · portrait</strong> — no taps needed.");
   }
 
   async function stopSession() {
     state.running = false;
-    state.zeroing = false;
-    state.zeroBuf = [];
     stopMotion();
     stopGps();
     await releaseWakeLock();
 
     el.btnStart.textContent = "Start";
     el.btnStart.classList.remove("running");
-    el.btnZero.disabled = true;
     el.btnReset.disabled = false;
 
     setHint(
@@ -477,14 +439,11 @@
   }
 
   function resetAll() {
-    state.zeroed = false;
-    state.bias = { x: 0, y: 0, z: 0 };
     resetTripStats();
-    setPill(el.pillZero, "Not zeroed", null);
     if (state.running) {
-      setHint("Trip reset. Tap <strong>Zero</strong> while stopped.");
+      setHint("Trip reset. Drive on — no zeroing.");
     } else {
-      setHint("Reset. Mount phone <strong>fixed · portrait</strong>, then Start.");
+      setHint("Mount phone <strong>fixed · portrait</strong>, then Start. Drive hands-off.");
     }
   }
 
@@ -497,14 +456,10 @@
   el.btnStart.addEventListener("click", () => {
     toggleStart();
   });
-  el.btnZero.addEventListener("click", () => {
-    startZero();
-  });
   el.btnReset.addEventListener("click", () => {
     resetAll();
   });
 
-  // Layout
   const fit = window.FitToScreen.create({
     stage: "fit-stage",
     app: "app",
