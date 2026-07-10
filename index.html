@@ -84,6 +84,8 @@
       transform: scale(1);
       transform-origin: center center;
       will-change: transform;
+      /* ~1/8" down so heading clears top; spare room at bottom */
+      margin-top: 0.125in;
     }
 
     .app:not(.is-fitted) { visibility: hidden; }
