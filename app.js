@@ -806,8 +806,10 @@
     stage: "fit-stage",
     app: "app",
     phoneMaxWidth: 767,
+    // Fixed design width so scale can grow equally into spare height (full-bleed width caps scale at 1).
+    phoneAppWidth: 360,
     wideAppWidth: 400,
-    capScaleAtOne: true,
+    capScaleAtOne: false,
   });
   fit.bindViewportListeners();
   fit.bootLayout();

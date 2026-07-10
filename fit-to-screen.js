@@ -18,6 +18,8 @@
       app: appOpt = "app",
       phoneMaxWidth = 767,
       wideAppWidth = 560,
+      /** If set, phone layout width is min(availW, phoneAppWidth) so scale can grow into leftover height. */
+      phoneAppWidth = null,
       phoneTopBuffer = 0,
       scaleEpsilon = 0.008,
       settleMaxMs = 600,
@@ -56,7 +58,11 @@
     }
 
     function appLayoutWidth(availW) {
-      return isPhoneLayout(availW) ? availW : wideAppWidth;
+      if (!isPhoneLayout(availW)) return wideAppWidth;
+      if (phoneAppWidth != null && phoneAppWidth > 0) {
+        return Math.min(availW, phoneAppWidth);
+      }
+      return availW;
     }
 
     function syncFitStageViewport() {
