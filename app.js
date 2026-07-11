@@ -74,10 +74,31 @@
     btnReset: document.getElementById("btn-reset"),
   };
 
+  function isDesktopLayout() {
+    return window.matchMedia("(min-width: 768px)").matches;
+  }
+
   function applyUnitsLabels() {
     el.speedUnit.textContent = useMph ? "mph" : "km/h";
   }
   applyUnitsLabels();
+
+  const DESKTOP_SPEED_MSG = "No sensors here. Open on your phone.";
+
+  function applyDesktopSpeedNudge() {
+    const desk = isDesktopLayout();
+    el.speedCard.classList.toggle("is-desktop-nudge", desk);
+    if (desk) {
+      el.speed.textContent = DESKTOP_SPEED_MSG;
+      el.speed.classList.add("is-desktop-msg");
+      el.speedUnit.classList.add("is-hidden");
+    } else {
+      el.speed.classList.remove("is-desktop-msg");
+      el.speedUnit.classList.remove("is-hidden");
+      applyUnitsLabels();
+    }
+    return desk;
+  }
 
   function emptyPeaks() {
     return { accel: 0, brake: 0, corner: 0, bump: 0 };
@@ -492,7 +513,9 @@
     paintChannel("corner", live.corner);
     paintChannel("bump", live.bump);
 
-    el.speed.textContent = formatSpeed(state.speedMps);
+    if (!applyDesktopSpeedNudge()) {
+      el.speed.textContent = formatSpeed(state.speedMps);
+    }
     el.time.textContent = formatTime(state.elapsedMs);
     el.dist.textContent = formatDist(state.distanceM);
     el.avgSpeed.textContent = formatAvgSpeed(state.distanceM, state.elapsedMs);
@@ -830,13 +853,22 @@
   el.btnStart.addEventListener("click", () => toggleStart());
   el.btnPause.addEventListener("click", () => togglePause());
   el.btnReset.addEventListener("click", () => resetAll());
-  el.speedCard.addEventListener("click", () => toggleUnits());
+  el.speedCard.addEventListener("click", () => {
+    if (isDesktopLayout()) return;
+    toggleUnits();
+  });
   el.speedCard.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
+      if (isDesktopLayout()) return;
       toggleUnits();
     }
   });
+  window.matchMedia("(min-width: 768px)").addEventListener("change", () => {
+    applyDesktopSpeedNudge();
+    state.lastUi = {};
+  });
+  applyDesktopSpeedNudge();
 
   const fit = window.FitToScreen.create({
     stage: "fit-stage",

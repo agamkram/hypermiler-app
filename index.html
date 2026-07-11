@@ -186,10 +186,29 @@
       font-variant-numeric: tabular-nums;
     }
 
+    .speed-value.is-desktop-msg {
+      font-family: "DM Sans", system-ui, sans-serif;
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+      color: var(--accent);
+      max-width: 17rem;
+      text-wrap: balance;
+    }
+
     .speed-unit {
       font-size: 0.8rem;
       font-weight: 600;
       color: var(--muted);
+    }
+
+    .speed-unit.is-hidden {
+      display: none;
+    }
+
+    .speed-card.is-desktop-nudge .label .tap-hint {
+      display: none;
     }
 
     .gauges {
