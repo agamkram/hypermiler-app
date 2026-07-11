@@ -74,8 +74,11 @@
     btnReset: document.getElementById("btn-reset"),
   };
 
+  /** Mac/PC only — iPads are wide but touch (coarse); don't treat them as desktop. */
+  const DESKTOP_MQ = "(hover: hover) and (pointer: fine) and (min-width: 900px)";
+
   function isDesktopLayout() {
-    return window.matchMedia("(min-width: 768px)").matches;
+    return window.matchMedia(DESKTOP_MQ).matches;
   }
 
   function applyUnitsLabels() {
@@ -864,7 +867,7 @@
       toggleUnits();
     }
   });
-  window.matchMedia("(min-width: 768px)").addEventListener("change", () => {
+  window.matchMedia(DESKTOP_MQ).addEventListener("change", () => {
     applyDesktopSpeedNudge();
     state.lastUi = {};
   });
@@ -873,18 +876,19 @@
   const fit = window.FitToScreen.create({
     stage: "fit-stage",
     app: "app",
-    phoneMaxWidth: 767,
+    // Include iPad widths so tablets use the phone fit path (scale-to-fill), not Mac "wide".
+    phoneMaxWidth: 1180,
     // Fixed design width so scale can grow equally into spare height (full-bleed width caps scale at 1).
     phoneAppWidth: 360,
     wideAppWidth: 400,
-    // Phone may scale up; Mac/PC cap at 1 so menu show/hide does not reflow header under chrome.
+    // Phone/iPad may scale up; real desktop caps at 1 so menu show/hide does not reflow header.
     capScaleAtOne: false,
-    getCapScaleAtOne: function (layout) {
-      return layout === "wide";
+    getCapScaleAtOne: function () {
+      return isDesktopLayout();
     },
-    // Desktop: reserve vertical space so scale-down keeps buttons above the window edge.
-    getTopBuffer: function (layout) {
-      return layout === "wide" ? 88 : 0;
+    // Desktop only: reserve vertical space so scale-down keeps buttons above the window edge.
+    getTopBuffer: function () {
+      return isDesktopLayout() ? 88 : 0;
     },
   });
   fit.bindViewportListeners();

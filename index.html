@@ -465,8 +465,11 @@
     .tone-amber { color: var(--amber); }
     .tone-red { color: var(--red); }
 
-    /* Mac / PC only — keep phone & tablet layout untouched */
-    @media (min-width: 768px) {
+    /*
+     * Mac / PC only — NOT iPad.
+     * Tablets are often ≥768px wide; require fine pointer + hover so touch iPads keep phone layout.
+     */
+    @media (hover: hover) and (pointer: fine) and (min-width: 900px) {
       .fit-stage {
         /* Top-anchor: auto-hide browser chrome shouldn't center-shift the header under the menu */
         align-items: flex-start;
