@@ -580,28 +580,64 @@
         const { latitude, longitude, speed, accuracy } = pos.coords;
         const t = pos.timestamp;
         const now = performance.now();
+        const accOk = accuracy == null || accuracy < 120;
 
-        if (speed != null && Number.isFinite(speed) && speed >= 0) {
-          if (state.speedMps != null && state.lastSpeedT) {
-            const dt = (now - state.lastSpeedT) / 1000;
-            if (dt > 0.2 && dt < 3) {
-              state._gpsAccel = (speed - state.speedMps) / dt;
-              state._gpsAccelAt = now;
-            }
-          }
-          state.speedMps = speed;
-          state.lastSpeedT = now;
-        }
+        let newSpeed = null;
+        const hasNativeSpeed =
+          speed != null && Number.isFinite(speed) && speed >= 0;
 
-        if (tripRecording() && state.lastGps) {
+        // Prefer GPS chip speed when present (phones / cellular iPads).
+        if (hasNativeSpeed) {
+          newSpeed = speed;
+        } else if (state.lastGps && accOk) {
+          // Wi‑Fi iPads often leave coords.speed null — derive from position deltas.
           const dt = (t - state.lastGps.t) / 1000;
-          if (dt > 0 && dt < 8 && accuracy != null && accuracy < 45) {
+          if (dt >= 0.45 && dt <= 5) {
             const d = haversineM(
               state.lastGps.lat,
               state.lastGps.lon,
               latitude,
               longitude
             );
+            if (d < 100) {
+              const derived = d / dt;
+              // Light smooth; snap toward zero when barely moving (GPS jitter).
+              if (derived < 0.6) {
+                newSpeed =
+                  state.speedMps == null
+                    ? 0
+                    : state.speedMps * 0.55;
+              } else if (state.speedMps == null) {
+                newSpeed = derived;
+              } else {
+                newSpeed = state.speedMps * 0.55 + derived * 0.45;
+              }
+            }
+          }
+        }
+
+        if (newSpeed != null && Number.isFinite(newSpeed)) {
+          if (state.speedMps != null && state.lastSpeedT) {
+            const dtS = (now - state.lastSpeedT) / 1000;
+            if (dtS > 0.2 && dtS < 3) {
+              state._gpsAccel = (newSpeed - state.speedMps) / dtS;
+              state._gpsAccelAt = now;
+            }
+          }
+          state.speedMps = Math.max(0, newSpeed);
+          state.lastSpeedT = now;
+        }
+
+        if (tripRecording() && state.lastGps && accOk) {
+          const dt = (t - state.lastGps.t) / 1000;
+          if (dt > 0 && dt < 8) {
+            const d = haversineM(
+              state.lastGps.lat,
+              state.lastGps.lon,
+              latitude,
+              longitude
+            );
+            // Distance while moving (native or derived speed).
             if (d < 80 && (state.speedMps == null || state.speedMps > 0.8)) {
               state.distanceM += d;
             }
