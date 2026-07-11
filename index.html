@@ -445,6 +445,19 @@
     .tone-green { color: var(--green); }
     .tone-amber { color: var(--amber); }
     .tone-red { color: var(--red); }
+
+    /* Mac / PC only — keep phone & tablet layout untouched */
+    @media (min-width: 768px) {
+      .fit-stage {
+        padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+      }
+
+      .app {
+        /* Slightly less top bias + small bottom margin so actions clear the window edge */
+        margin-top: 0.08in;
+        margin-bottom: 0.55rem;
+      }
+    }
   </style>
 </head>
 <body>
