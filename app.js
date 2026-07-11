@@ -240,14 +240,14 @@
   }
 
   function toneForG(g) {
-    if (g < 0.12) return "tone-green";
-    if (g < 0.25) return "tone-amber";
+    if (g < 0.25) return "tone-green";
+    if (g < 0.4) return "tone-amber";
     return "tone-red";
   }
 
   function barColor(g) {
-    if (g < 0.12) return "var(--green)";
-    if (g < 0.25) return "var(--amber)";
+    if (g < 0.25) return "var(--green)";
+    if (g < 0.4) return "var(--amber)";
     return "var(--red)";
   }
 
