@@ -850,6 +850,10 @@
     getCapScaleAtOne: function (layout) {
       return layout === "wide";
     },
+    // Desktop: reserve vertical space so scale-down keeps buttons above the window edge.
+    getTopBuffer: function (layout) {
+      return layout === "wide" ? 88 : 0;
+    },
   });
   fit.bindViewportListeners();
   fit.bootLayout();

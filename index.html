@@ -456,12 +456,13 @@
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         padding-top: max(1.75rem, env(safe-area-inset-top));
-        padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+        /* Extra room so Start/Pause/Reset clear the window bottom */
+        padding-bottom: max(2.25rem, env(safe-area-inset-bottom));
       }
 
       .app {
         margin-top: 0.35rem;
-        margin-bottom: 0.75rem;
+        margin-bottom: 1.1rem;
         /* Scale from top so height shrinks don't pull the title into chrome */
         transform-origin: top center;
       }
