@@ -449,13 +449,21 @@
     /* Mac / PC only — keep phone & tablet layout untouched */
     @media (min-width: 768px) {
       .fit-stage {
+        /* Top-anchor: auto-hide browser chrome shouldn't center-shift the header under the menu */
+        align-items: flex-start;
+        justify-content: center;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-top: max(1.75rem, env(safe-area-inset-top));
         padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
       }
 
       .app {
-        /* Slightly less top bias + small bottom margin so actions clear the window edge */
-        margin-top: 0.08in;
-        margin-bottom: 0.55rem;
+        margin-top: 0.35rem;
+        margin-bottom: 0.75rem;
+        /* Scale from top so height shrinks don't pull the title into chrome */
+        transform-origin: top center;
       }
     }
   </style>

@@ -26,6 +26,7 @@
       settleStableFrames = 4,
       resizeGraceMs = 350,
       capScaleAtOne = true,
+      getCapScaleAtOne = null,
       shouldFit = () => true,
       getTopBuffer,
       onFit = () => {},
@@ -119,7 +120,10 @@
         (availH - buffer) / fitNaturalH,
         availW / fitNaturalW
       );
-      if (capScaleAtOne) scale = Math.min(scale, 1);
+      const capAtOne = getCapScaleAtOne
+        ? getCapScaleAtOne(layout, availW, availH)
+        : capScaleAtOne;
+      if (capAtOne) scale = Math.min(scale, 1);
 
       if (
         layoutReady &&

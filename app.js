@@ -845,7 +845,11 @@
     // Fixed design width so scale can grow equally into spare height (full-bleed width caps scale at 1).
     phoneAppWidth: 360,
     wideAppWidth: 400,
+    // Phone may scale up; Mac/PC cap at 1 so menu show/hide does not reflow header under chrome.
     capScaleAtOne: false,
+    getCapScaleAtOne: function (layout) {
+      return layout === "wide";
+    },
   });
   fit.bindViewportListeners();
   fit.bootLayout();
