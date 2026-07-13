@@ -534,13 +534,13 @@
         : 0;
     el.scored.textContent = `${scoredPct}%`;
 
-    // Mount pill: only Pause / idle — no Docked / Driving / Handheld labels
+    // Trip state pill: Recording (green) / Paused (amber) / idle
     if (!state.running) {
       setPill(el.pillMount, "—", null);
     } else if (state.paused) {
       setPill(el.pillMount, "Paused", "warn");
     } else {
-      setPill(el.pillMount, "—", null);
+      setPill(el.pillMount, "Recording", "on");
     }
 
     const score = tripScore();
@@ -777,8 +777,8 @@
     el.btnStart.classList.add("running");
     el.btnReset.disabled = false;
     setPauseUi();
-    setPill(el.pillMount, "—", null);
-    setHint("Running. Fixed mount any angle · peak holds only while recording.");
+    setPill(el.pillMount, "Recording", "on");
+    setHint("Recording. Fixed mount any angle · peak holds while recording.");
   }
 
   async function stopSession() {
