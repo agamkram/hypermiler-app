@@ -406,8 +406,15 @@
     }
   }
 
+  function freezeLiveMeters() {
+    // Bars go quiet; session/recent peak holds stay where they were.
+    state.live = { accel: 0, brake: 0, corner: 0, bump: 0 };
+    state.lastUi = {};
+  }
+
   function onMotion(event) {
-    if (!state.running) return;
+    // Same gate as scoring: meters only move while started and not paused.
+    if (!tripRecording()) return;
     const now = performance.now();
     const { aLin, down } = readSensors(event);
     if (!aLin) return;
@@ -440,12 +447,9 @@
     };
     state.live = live;
 
-    // Live gauges always update while sensors run; trip metrics only while recording
-    if (!tripRecording()) return;
-
     state.totalMotionN += 1;
 
-    // Dual peak holds: session + recent, only while started and not paused
+    // Dual peak holds: session + recent, only while recording
     updatePeaks(live, now);
 
     const trusted = isTrusted(now);
@@ -785,6 +789,7 @@
     syncElapsed(performance.now());
     state.running = false;
     state.paused = false;
+    freezeLiveMeters();
     stopMotion();
     stopGps();
     await releaseWakeLock();
@@ -806,12 +811,13 @@
     if (state.paused) {
       state.paused = false;
       state.elapsedTickAt = now;
-      setHint("Resumed. Trip recording on.");
+      setHint("Resumed. Meters and scoring are live again.");
     } else {
       syncElapsed(now);
       state.paused = true;
       state.elapsedTickAt = 0;
-      setHint("Paused. Live gauges still move · trip stats frozen.");
+      freezeLiveMeters();
+      setHint("Paused. Meters off · peak holds kept · trip stats frozen.");
     }
     setPauseUi();
   }
