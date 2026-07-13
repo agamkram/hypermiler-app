@@ -1,6 +1,6 @@
 /**
  * HyperMiler — live forces + bumps + smoothness (policy A).
- * Auto orientation · handheld gate · score only while moving · dual peak holds.
+ * Auto orientation · handheld gate (scoring) · score only while moving · dual peak holds while recording.
  */
 (function () {
   "use strict";
@@ -391,17 +391,18 @@
     return { aLin, down };
   }
 
-  function updatePeaks(live, trusted, now) {
+  /** Peak holds only while trip is actively recording (started, not paused). */
+  function updatePeaks(live, now) {
     for (const ch of CHANS) {
       const v = live[ch];
-      if (trusted && v >= state.recent[ch]) {
+      if (v >= state.recent[ch]) {
         state.recent[ch] = v;
         state.recentAt[ch] = now;
       } else if (now - (state.recentAt[ch] || 0) > RECENT_HOLD_MS) {
         state.recent[ch] = Math.max(v, state.recent[ch] * RECENT_DECAY);
         if (state.recent[ch] < 0.02) state.recent[ch] = v;
       }
-      if (trusted && v > state.session[ch]) state.session[ch] = v;
+      if (v > state.session[ch]) state.session[ch] = v;
     }
   }
 
@@ -439,20 +440,22 @@
     };
     state.live = live;
 
-    // Live gauges always update; trip metrics only while recording
+    // Live gauges always update while sensors run; trip metrics only while recording
     if (!tripRecording()) return;
 
     state.totalMotionN += 1;
 
+    // Dual peak holds: session + recent, only while started and not paused
+    updatePeaks(live, now);
+
     const trusted = isTrusted(now);
-    updatePeaks(live, trusted, now);
 
     if (trusted) {
       const driveMag = Math.hypot(long, lat);
       if (driveMag > state.peakDriveG) state.peakDriveG = driveMag;
     }
 
-    // Score samples: policy A — long/lat only, moving + docked
+    // Score samples: policy A — long/lat only, moving + not handheld
     if (trusted && isMoving()) {
       const driveMag = Math.hypot(long, lat);
       state.sampleN += 1;
@@ -531,11 +534,13 @@
         : 0;
     el.scored.textContent = `${scoredPct}%`;
 
-    if (state.running) {
-      if (state.paused) setPill(el.pillMount, "Paused", "warn");
-      else if (isHandheld(now)) setPill(el.pillMount, "Handheld", "warn");
-      else if (isMoving()) setPill(el.pillMount, "Driving", "on");
-      else setPill(el.pillMount, "Docked", "on");
+    // Mount pill: only Pause / idle — no Docked / Driving / Handheld labels
+    if (!state.running) {
+      setPill(el.pillMount, "—", null);
+    } else if (state.paused) {
+      setPill(el.pillMount, "Paused", "warn");
+    } else {
+      setPill(el.pillMount, "—", null);
     }
 
     const score = tripScore();
@@ -772,8 +777,8 @@
     el.btnStart.classList.add("running");
     el.btnReset.disabled = false;
     setPauseUi();
-    setPill(el.pillMount, "Docked", "on");
-    setHint("Running. Fixed mount any angle · handheld time is not scored.");
+    setPill(el.pillMount, "—", null);
+    setHint("Running. Fixed mount any angle · peak holds only while recording.");
   }
 
   async function stopSession() {
