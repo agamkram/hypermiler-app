@@ -6,7 +6,7 @@
   "use strict";
 
   const G = 9.80665;
-  const BAR_MAX_G = 2.0;
+  const BAR_MAX_G = 1.0;
   const SMOOTH_ALPHA = 0.2;
   const GRAV_ALPHA = 0.04;
   const FWD_BLEND = 0.08;
