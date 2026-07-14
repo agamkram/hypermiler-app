@@ -8,6 +8,8 @@
   const G = 9.80665;
   const BAR_MAX_G = 1.0;
   const SMOOTH_ALPHA = 0.2;
+  /** Display-only second pass — high α keeps bars close to motion; lower = calmer. Scoring ignores this. */
+  const DISPLAY_ALPHA = 0.55;
   const GRAV_ALPHA = 0.04;
   const FWD_BLEND = 0.08;
   const MOVE_MPS = 1.2; // ~2.7 mph
@@ -122,6 +124,9 @@
     smoothLong: 0,
     smoothLat: 0,
     smoothVert: 0,
+    uiLong: 0,
+    uiLat: 0,
+    uiVert: 0,
     recent: emptyPeaks(),
     recentAt: emptyPeaks(),
     session: emptyPeaks(),
@@ -409,6 +414,9 @@
   function freezeLiveMeters() {
     // Bars go quiet; session/recent peak holds stay where they were.
     state.live = { accel: 0, brake: 0, corner: 0, bump: 0 };
+    state.uiLong = 0;
+    state.uiLat = 0;
+    state.uiVert = 0;
     state.lastUi = {};
   }
 
@@ -439,18 +447,29 @@
     const lat = state.smoothLat;
     const vertAbs = Math.abs(state.smoothVert);
 
-    const live = {
+    // Score / peaks use force path (unchanged). Bars get a light extra damp only.
+    const forceLive = {
       accel: Math.max(0, long),
       brake: Math.max(0, -long),
       corner: Math.abs(lat),
       bump: vertAbs,
     };
-    state.live = live;
+
+    state.uiLong += DISPLAY_ALPHA * (long - state.uiLong);
+    state.uiLat += DISPLAY_ALPHA * (lat - state.uiLat);
+    state.uiVert += DISPLAY_ALPHA * (vertAbs - state.uiVert);
+
+    state.live = {
+      accel: Math.max(0, state.uiLong),
+      brake: Math.max(0, -state.uiLong),
+      corner: Math.abs(state.uiLat),
+      bump: Math.max(0, state.uiVert),
+    };
 
     state.totalMotionN += 1;
 
-    // Dual peak holds: session + recent, only while recording
-    updatePeaks(live, now);
+    // Dual peak holds: session + recent from force path, only while recording
+    updatePeaks(forceLive, now);
 
     const trusted = isTrusted(now);
 
@@ -736,6 +755,9 @@
     state.smoothLong = 0;
     state.smoothLat = 0;
     state.smoothVert = 0;
+    state.uiLong = 0;
+    state.uiLat = 0;
+    state.uiVert = 0;
     state.live = { accel: 0, brake: 0, corner: 0, bump: 0 };
     state.recent = emptyPeaks();
     state.recentAt = emptyPeaks();
