@@ -804,7 +804,7 @@
     el.btnReset.disabled = false;
     setPauseUi();
     setPill(el.pillMount, "Recording", "on");
-    setHint("Recording. Fixed mount any angle · peak holds while recording.");
+    setHint("Recording. Peak holds while recording.");
   }
 
   async function stopSession() {
@@ -858,7 +858,7 @@
     if (state.running) {
       setHint(state.paused ? "Trip reset (still paused)." : "Trip reset. Drive on.");
     } else {
-      setHint("Mount fixed (any angle). Tap <strong>Start</strong> — Smooth = driving only; bumps separate.");
+      setHint("Tap <strong>Start</strong> — Smooth = driving only; peaks hold while recording.");
     }
   }
 
