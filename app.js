@@ -858,7 +858,7 @@
     if (state.running) {
       setHint(state.paused ? "Trip reset (still paused)." : "Trip reset. Drive on.");
     } else {
-      setHint("Tap <strong>Start</strong> — Smooth = driving only; peaks hold while recording.");
+      setHint("Tap <strong>Start</strong> — Meter action reflects driving inputs. Reduce g’s to increase MPG and reduce wear.");
     }
   }
 
