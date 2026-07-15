@@ -6,7 +6,7 @@
   "use strict";
 
   const G = 9.80665;
-  const BAR_MAX_G = 1.0;
+  const BAR_MAX_G = 0.5; // TEMP test — restore to 1.0 after meter-action check
   const SMOOTH_ALPHA = 0.2;
   /** Display-only second pass — high α keeps bars close to motion; lower = calmer. Scoring ignores this. */
   const DISPLAY_ALPHA = 0.55;
