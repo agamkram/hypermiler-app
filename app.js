@@ -10,6 +10,9 @@
   const SMOOTH_ALPHA = 0.2;
   /** Display-only second pass — high α keeps bars close to motion; lower = calmer. Scoring ignores this. */
   const DISPLAY_ALPHA = 0.10;
+  /** UI paint cap: ~25 Hz while recording, slower when idle/paused. */
+  const PAINT_MS_RECORDING = 40;
+  const PAINT_MS_IDLE = 100;
   const GRAV_ALPHA = 0.04;
   const FWD_BLEND = 0.08;
   const MOVE_MPS = 1.2; // ~2.7 mph
@@ -145,6 +148,7 @@
     geoWatchId: null,
     motionHandler: null,
     raf: 0,
+    lastPaintAt: 0,
     lastUi: {},
   };
 
@@ -532,8 +536,14 @@
     setPeakLine(el.pr[ch], state.recent[ch], maxG);
   }
 
-  function paint() {
-    const now = performance.now();
+  function paint(ts) {
+    state.raf = requestAnimationFrame(paint);
+
+    const now = typeof ts === "number" ? ts : performance.now();
+    const minMs = tripRecording() ? PAINT_MS_RECORDING : PAINT_MS_IDLE;
+    if (state.lastPaintAt && now - state.lastPaintAt < minMs) return;
+    state.lastPaintAt = now;
+
     syncElapsed(now);
     const live = state.live;
 
@@ -573,8 +583,6 @@
       el.scoreRing.style.background = `radial-gradient(circle at center, var(--surface) 58%, transparent 59%), conic-gradient(${scoreTone(score)} var(--score-deg), var(--surface-2) 0)`;
       state.lastUi.score = score;
     }
-
-    state.raf = requestAnimationFrame(paint);
   }
 
   function setHint(html) {
@@ -833,13 +841,15 @@
     if (state.paused) {
       state.paused = false;
       state.elapsedTickAt = now;
+      startGps();
       setHint("Resumed. Meters and scoring are live again.");
     } else {
       syncElapsed(now);
       state.paused = true;
       state.elapsedTickAt = 0;
       freezeLiveMeters();
-      setHint("Paused. Meters off · peak holds kept · trip stats frozen.");
+      stopGps();
+      setHint("Paused. GPS off · meters off · peak holds kept.");
     }
     setPauseUi();
   }
