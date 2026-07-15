@@ -9,7 +9,7 @@
   const BAR_MAX_G = 0.5; // TEMP test — restore to 1.0 after meter-action check
   const SMOOTH_ALPHA = 0.2;
   /** Display-only second pass — high α keeps bars close to motion; lower = calmer. Scoring ignores this. */
-  const DISPLAY_ALPHA = 0.38;
+  const DISPLAY_ALPHA = 0.25;
   const GRAV_ALPHA = 0.04;
   const FWD_BLEND = 0.08;
   const MOVE_MPS = 1.2; // ~2.7 mph
