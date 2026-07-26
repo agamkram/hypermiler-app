@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+  />
+  <meta name="theme-color" content="#0a0e14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="HyperMiler" />
+  <meta
+    name="description"
+    content="Live g-forces, bumps, and trip smoothness for calmer driving."
+  />
+  <title>HyperMiler</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="apple-touch-icon.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      color-scheme: dark;
+      /* Uniform design scale — all rem-based UI grows together */
+      font-size: 112.5%;
+      --bg: #0a0e14;
+      --surface: #121a24;
+      --surface-2: #1a2533;
+      --text: #e8edf4;
+      --muted: #7d8fa3;
+      --accent: #3d9cf5;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --border: rgba(255, 255, 255, 0.08);
+      --app-gap: 0.5rem;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      max-height: 100dvh;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "DM Sans", system-ui, sans-serif;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    .fit-stage {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding:
+        max(0.15rem, env(safe-area-inset-top))
+        max(0.25rem, env(safe-area-inset-right))
+        max(0.15rem, env(safe-area-inset-bottom))
+        max(0.25rem, env(safe-area-inset-left));
+    }
+
+    .app {
+      position: relative;
+      flex-shrink: 0;
+      width: min(24rem, 100%);
+      box-sizing: border-box;
+      padding: 0.55rem 0.6rem 0.65rem;
+      display: flex;
+      flex-direction: column;
+      gap: var(--app-gap);
+      transform: scale(1);
+      transform-origin: center center;
+      will-change: transform;
+      /* Top clearance so heading clears chrome; spare room at bottom */
+      margin-top: calc(0.1875in + 10px);
+    }
+
+    .app:not(.is-fitted) { visibility: hidden; }
+
+    header { text-align: center; }
+
+    header h1 {
+      font-size: 1.28rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    header .sub {
+      margin-top: 0.1rem;
+      font-size: 0.64rem;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    .status {
+      display: flex;
+      justify-content: center;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      min-height: 1.05rem;
+    }
+
+    .pill {
+      font-size: 0.55rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.16rem 0.4rem;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .pill.on {
+      color: var(--green);
+      border-color: rgba(52, 211, 153, 0.35);
+      background: rgba(52, 211, 153, 0.1);
+    }
+
+    .pill.warn {
+      color: var(--amber);
+      border-color: rgba(251, 191, 36, 0.35);
+      background: rgba(251, 191, 36, 0.1);
+    }
+
+    .speed-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.9rem;
+      padding: 0.55rem 0.7rem 0.5rem;
+      text-align: center;
+      cursor: pointer;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .speed-card:active {
+      background: var(--surface-2);
+    }
+
+    .speed-card .label {
+      font-size: 0.58rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .speed-card .label .tap-hint {
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      text-transform: none;
+      opacity: 0.75;
+    }
+
+    .speed-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.3rem;
+      margin-top: 0.05rem;
+    }
+
+    .speed-value {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 3.15rem;
+      font-weight: 600;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .speed-value.is-desktop-msg {
+      font-family: "DM Sans", system-ui, sans-serif;
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+      color: var(--accent);
+      max-width: 17rem;
+      text-wrap: balance;
+    }
+
+    .speed-unit {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .speed-unit.is-hidden {
+      display: none;
+    }
+
+    .speed-card.is-desktop-nudge .label .tap-hint {
+      display: none;
+    }
+
+    .gauges {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.35rem;
+      flex: 0 0 auto;
+    }
+
+    .gauge {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.8rem;
+      padding: 0.45rem 0.15rem 0.5rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.28rem;
+      min-height: 14rem;
+      overflow: visible;
+    }
+
+    .gauge .g-label {
+      font-size: 0.54rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .gauge .g-value {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.88rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .bar-track {
+      flex: 1 1 auto;
+      width: 1.55rem;
+      min-height: 10.25rem;
+      background: var(--surface-2);
+      border-radius: 999px;
+      position: relative;
+      overflow: visible;
+      border: 1px solid var(--border);
+    }
+
+    .bar-fill {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 0%;
+      border-radius: 999px;
+      background: var(--green);
+      transition: height 50ms linear, background-color 70ms linear;
+      z-index: 1;
+      /* clip fill to pill without clipping peak labels */
+      clip-path: inset(0 round 999px);
+    }
+
+    /* Dual peak holds: session (left label) + recent (right label), color = severity at peak */
+    .peak-session,
+    .peak-recent {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 0;
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0;
+      transition: bottom 40ms linear, opacity 120ms linear;
+      --peak-color: var(--green);
+    }
+
+    .peak-session::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: -1px;
+      height: 2px;
+      background: var(--peak-color);
+      opacity: 0.8;
+      box-shadow: 0 0 5px var(--peak-color);
+    }
+
+    .peak-recent::after {
+      content: "";
+      position: absolute;
+      left: -1px;
+      right: -1px;
+      top: -1.5px;
+      height: 3px;
+      background: var(--peak-color);
+      box-shadow: 0 0 8px var(--peak-color);
+      border-radius: 1px;
+    }
+
+    .peak-lbl {
+      position: absolute;
+      top: -0.55em;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.62rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      color: var(--peak-color);
+      white-space: nowrap;
+      text-shadow: 0 0 4px rgba(0, 0, 0, 0.85);
+    }
+
+    .peak-session .peak-lbl {
+      right: calc(100% + 0.2rem);
+      left: auto;
+      text-align: right;
+      opacity: 0.9;
+    }
+
+    .peak-recent .peak-lbl {
+      left: calc(100% + 0.2rem);
+      right: auto;
+      text-align: left;
+    }
+
+    .score-card {
+      background: linear-gradient(160deg, #121a24 0%, #152032 100%);
+      border: 1px solid var(--border);
+      border-radius: 0.95rem;
+      padding: 0.55rem 0.6rem 0.6rem;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.65rem;
+      align-items: center;
+    }
+
+    .score-ring {
+      width: 5.6rem;
+      height: 5.6rem;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, var(--surface) 58%, transparent 59%),
+        conic-gradient(var(--green) var(--score-deg, 0deg), var(--surface-2) 0);
+    }
+
+    .score-inner { text-align: center; }
+
+    .score-num {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 1.55rem;
+      font-weight: 600;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .score-lbl {
+      margin-top: 0.12rem;
+      font-size: 0.52rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .score-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.32rem 0.4rem;
+    }
+
+    .stat {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.3rem 0.35rem;
+    }
+
+    .stat .k {
+      font-size: 0.5rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .stat .v {
+      margin-top: 0.08rem;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.78rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hint {
+      text-align: center;
+      font-size: 0.6rem;
+      line-height: 1.35;
+      color: var(--muted);
+      min-height: 1.55rem;
+      padding: 0 0.15rem;
+    }
+
+    .hint strong { color: var(--text); font-weight: 600; }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      border-radius: 0.75rem;
+      padding: 0.7rem 0.4rem;
+      cursor: pointer;
+    }
+
+    button:active { transform: scale(0.98); }
+
+    button.primary {
+      background: var(--accent);
+      border-color: transparent;
+      color: #041018;
+    }
+
+    button.primary.running {
+      background: #1f3a52;
+      color: var(--text);
+      border-color: rgba(61, 156, 245, 0.35);
+    }
+
+    button.paused-btn {
+      border-color: rgba(251, 191, 36, 0.45);
+      color: var(--amber);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 0.35rem;
+    }
+
+    .tone-green { color: var(--green); }
+    .tone-amber { color: var(--amber); }
+    .tone-red { color: var(--red); }
+
+    /*
+     * Mac / PC only — NOT iPad.
+     * Tablets are often ≥768px wide; require fine pointer + hover so touch iPads keep phone layout.
+     */
+    @media (hover: hover) and (pointer: fine) and (min-width: 900px) {
+      .fit-stage {
+        /* Top-anchor: auto-hide browser chrome shouldn't center-shift the header under the menu */
+        align-items: flex-start;
+        justify-content: center;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-top: max(1.75rem, env(safe-area-inset-top));
+        /* Extra room so Start/Pause/Reset clear the window bottom */
+        padding-bottom: max(2.25rem, env(safe-area-inset-bottom));
+      }
+
+      .app {
+        margin-top: 0.35rem;
+        margin-bottom: 1.1rem;
+        /* Scale from top so height shrinks don't pull the title into chrome */
+        transform-origin: top center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="fit-stage" id="fit-stage">
+    <main class="app" id="app">
+      <header>
+        <h1>HyperMiler</h1>
+        <p class="sub">Drive smooth. Win big</p>
+      </header>
+
+      <div class="status" aria-live="polite">
+        <span class="pill" id="pill-motion">Motion off</span>
+        <span class="pill" id="pill-gps">GPS off</span>
+        <span class="pill" id="pill-mount">—</span>
+      </div>
+
+      <section
+        class="speed-card"
+        id="speed-card"
+        role="button"
+        tabindex="0"
+        aria-label="Speed. Tap to switch units"
+      >
+        <div class="label">Speed <span class="tap-hint">· tap units</span></div>
+        <div class="speed-row">
+          <div class="speed-value" id="speed">—</div>
+          <div class="speed-unit" id="speed-unit">mph</div>
+        </div>
+      </section>
+
+      <section class="gauges" aria-label="Live forces">
+        <div class="gauge" data-ch="accel">
+          <div class="g-label">Accel</div>
+          <div class="bar-track" aria-hidden="true">
+            <div class="bar-fill" id="bar-accel"></div>
+            <div class="peak-session" id="ps-accel"><span class="peak-lbl"></span></div>
+            <div class="peak-recent" id="pr-accel"><span class="peak-lbl"></span></div>
+          </div>
+          <div class="g-value" id="val-accel">0.0g</div>
+        </div>
+        <div class="gauge" data-ch="brake">
+          <div class="g-label">Brake</div>
+          <div class="bar-track" aria-hidden="true">
+            <div class="bar-fill" id="bar-brake"></div>
+            <div class="peak-session" id="ps-brake"><span class="peak-lbl"></span></div>
+            <div class="peak-recent" id="pr-brake"><span class="peak-lbl"></span></div>
+          </div>
+          <div class="g-value" id="val-brake">0.0g</div>
+        </div>
+        <div class="gauge" data-ch="corner">
+          <div class="g-label">Corner</div>
+          <div class="bar-track" aria-hidden="true">
+            <div class="bar-fill" id="bar-corner"></div>
+            <div class="peak-session" id="ps-corner"><span class="peak-lbl"></span></div>
+            <div class="peak-recent" id="pr-corner"><span class="peak-lbl"></span></div>
+          </div>
+          <div class="g-value" id="val-corner">0.0g</div>
+        </div>
+        <div class="gauge" data-ch="bump">
+          <div class="g-label">Bump</div>
+          <div class="bar-track" aria-hidden="true">
+            <div class="bar-fill" id="bar-bump"></div>
+            <div class="peak-session" id="ps-bump"><span class="peak-lbl"></span></div>
+            <div class="peak-recent" id="pr-bump"><span class="peak-lbl"></span></div>
+          </div>
+          <div class="g-value" id="val-bump">0.0g</div>
+        </div>
+      </section>
+
+      <section class="score-card" aria-label="Trip score">
+        <div class="score-ring" id="score-ring">
+          <div class="score-inner">
+            <div class="score-num" id="score">100</div>
+            <div class="score-lbl">Smooth</div>
+          </div>
+        </div>
+        <div class="score-meta">
+          <div class="stat"><div class="k">Distance</div><div class="v" id="dist">0.0 mi</div></div>
+          <div class="stat"><div class="k">Trip time</div><div class="v" id="time">0:00</div></div>
+          <div class="stat"><div class="k">Peak drive</div><div class="v" id="peak-drive">0.0</div></div>
+          <div class="stat"><div class="k">Bumps</div><div class="v" id="bumps">0</div></div>
+          <div class="stat"><div class="k">Scored</div><div class="v" id="scored">0%</div></div>
+          <div class="stat"><div class="k">Avg speed</div><div class="v" id="avg-speed">—</div></div>
+        </div>
+      </section>
+
+      <p class="hint" id="hint">
+        Tap <strong>Start</strong> — Meter action reflects driving inputs. Reduce g’s to increase MPG and reduce wear.
+      </p>
+
+      <div class="actions">
+        <button type="button" class="primary" id="btn-start">Start</button>
+        <button type="button" id="btn-pause" disabled>Pause</button>
+        <button type="button" id="btn-reset" disabled>Reset</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="fit-to-screen.js"></script>
+  <script src="app.js"></script>
+  <script>
+    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  </script>
+  <script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>
