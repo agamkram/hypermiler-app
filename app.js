@@ -948,18 +948,15 @@
 
     if (standalone) {
       const portrait = ih >= iw;
-      // SuperMars A2HS fill: use the long screen edge in portrait
-      let height = portrait
-        ? Math.max(ih, screenMax || 0)
-        : Math.max(ih, screenMin || 0);
-      let width = portrait
-        ? Math.max(iw, screenMin || 0)
-        : Math.max(iw, screenMax || 0);
-      // Never shrink below a taller value we already painted (stops jump-down)
-      const prevH = parseFloat(
-        document.documentElement.style.getPropertyValue("--vv-h")
-      );
-      if (Number.isFinite(prevH) && prevH > height) height = prevH;
+      // Drawable height only. Using full screen.* overshoots into the home-
+      // indicator band — buttons clipped with empty space still visible below.
+      let height = Math.max(ih, (vv && vv.height) || 0);
+      let width = Math.max(iw, (vv && vv.width) || 0);
+      // Only boost with screen when innerHeight clearly undershoots (iPad)
+      const longEdge = portrait ? screenMax : screenMin;
+      if (longEdge > 0 && height < longEdge * 0.82) height = longEdge;
+      const shortEdge = portrait ? screenMin : screenMax;
+      if (shortEdge > 0 && width < shortEdge * 0.82) width = shortEdge;
       return {
         top: 0,
         left: 0,
