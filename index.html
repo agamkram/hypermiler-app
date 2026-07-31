@@ -76,11 +76,12 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      /* Extra top inset keeps title clear of notch / Safari status; bottom stays tight. */
       padding:
-        max(0.15rem, env(safe-area-inset-top))
-        max(0.25rem, env(safe-area-inset-right))
-        max(0.15rem, env(safe-area-inset-bottom))
-        max(0.25rem, env(safe-area-inset-left));
+        max(0.4rem, env(safe-area-inset-top, 0px), 0.35in)
+        max(0.25rem, env(safe-area-inset-right, 0px))
+        max(0.2rem, env(safe-area-inset-bottom, 0px))
+        max(0.25rem, env(safe-area-inset-left, 0px));
     }
 
     .app {
@@ -93,10 +94,10 @@
       flex-direction: column;
       gap: var(--app-gap);
       transform: scale(1);
-      /* Default center fill; fit-to-screen.js switches to top in Safari tabs only. */
       transform-origin: center center;
       will-change: transform;
-      margin-top: calc(0.1875in + 10px);
+      /* No margin-top — it created bottom dead space and fought the scaler. */
+      margin-top: 0;
     }
 
     .app:not(.is-fitted) { visibility: hidden; }
@@ -599,8 +600,8 @@
     </main>
   </div>
 
-  <script src="fit-to-screen.js?v=safari-btn2"></script>
-  <script src="app.js?v=safari-btn2"></script>
+  <script src="fit-to-screen.js?v=safari-btn3"></script>
+  <script src="app.js?v=safari-btn3"></script>
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
   </script>

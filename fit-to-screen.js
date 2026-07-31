@@ -139,10 +139,11 @@
       const padB = parseFloat(cs.paddingBottom) || 0;
       const padL = parseFloat(cs.paddingLeft) || 0;
       const padR = parseFloat(cs.paddingRight) || 0;
-      // Safari needs a little slack under buttons; PWA should fill (no short meters / gap).
-      const SAFETY = standalone ? 2 : 10;
+      // Tiny slack only — large SAFETY shortens meters and leaves a dead band under buttons.
+      // Safari clearance comes from visualViewport pin + stage safe-area padding, not this.
+      const SAFETY = standalone ? 2 : 6;
       const contentH = Math.max(1, availH - padT - padB - buffer - SAFETY);
-      const contentW = Math.max(1, availW - padL - padR - (standalone ? 0 : 2));
+      const contentW = Math.max(1, availW - padL - padR);
       let scale = Math.min(contentH / fitNaturalH, contentW / fitNaturalW);
       const capAtOne = getCapScaleAtOne
         ? getCapScaleAtOne(layout, availW, availH)
@@ -150,8 +151,11 @@
       if (capAtOne) scale = Math.min(scale, 1);
       if (!Number.isFinite(scale) || scale <= 0) scale = 1;
 
-      // PWA: center so spare space is even. Safari: top so toolbar doesn't eat buttons.
-      app.style.transformOrigin = standalone ? "center center" : "top center";
+      // Always center on phone: top-origin + flex-center was climbing into the notch
+      // and dumping empty space under the buttons. Desktop CSS still uses top origin.
+      if (!capAtOne || layout === "phone") {
+        app.style.transformOrigin = "center center";
+      }
 
       if (
         layoutReady &&
