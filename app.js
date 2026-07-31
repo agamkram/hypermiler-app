@@ -913,29 +913,106 @@
   window.matchMedia(DESKTOP_MQ).addEventListener("change", () => {
     applyDesktopSpeedNudge();
     state.lastUi = {};
+    bootLayout();
   });
   applyDesktopSpeedNudge();
+
+  /**
+   * Phone/iPad: pin stage to the real visible box (Safari VV / PWA edges).
+   * Content is fluid CSS — gauges flex to fill. No transform scale.
+   * Desktop: FitToScreen scale card (unchanged).
+   */
+  function isStandaloneDisplay() {
+    try {
+      return (
+        window.matchMedia("(display-mode: standalone)").matches ||
+        window.navigator.standalone === true
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function pinPhoneStage() {
+    const stage = document.getElementById("fit-stage");
+    const app = document.getElementById("app");
+    if (!stage || !app) return;
+
+    if (isDesktopLayout()) {
+      stage.classList.remove("fit-stage--fluid");
+      stage.style.top = "";
+      stage.style.left = "";
+      stage.style.right = "";
+      stage.style.bottom = "";
+      stage.style.width = "";
+      stage.style.height = "";
+      stage.style.position = "";
+      app.style.width = "";
+      app.style.height = "";
+      app.style.maxWidth = "";
+      app.style.transform = "";
+      return;
+    }
+
+    stage.classList.add("fit-stage--fluid");
+    stage.style.position = "fixed";
+    const vv = window.visualViewport;
+    const standalone = isStandaloneDisplay();
+
+    if (!standalone && vv && vv.height > 40 && vv.width > 40) {
+      // Safari tab: visible viewport only (bottom toolbar already accounted for)
+      stage.style.top = `${Math.max(0, Math.round(vv.offsetTop) || 0)}px`;
+      stage.style.left = `${Math.max(0, Math.round(vv.offsetLeft) || 0)}px`;
+      stage.style.width = `${Math.round(vv.width)}px`;
+      stage.style.height = `${Math.round(vv.height)}px`;
+      stage.style.right = "auto";
+      stage.style.bottom = "auto";
+    } else {
+      // PWA / full screen
+      stage.style.top = "0";
+      stage.style.left = "0";
+      stage.style.right = "0";
+      stage.style.bottom = "0";
+      stage.style.width = "";
+      stage.style.height = "";
+    }
+
+    app.style.transform = "none";
+    app.style.width = "100%";
+    app.style.maxWidth = "none";
+    app.style.height = "100%";
+    app.style.minHeight = "0";
+    app.classList.add("is-fitted");
+  }
 
   const fit = window.FitToScreen.create({
     stage: "fit-stage",
     app: "app",
-    // Include iPad widths so tablets use the phone fit path (scale-to-fill), not Mac "wide".
     phoneMaxWidth: 1180,
-    // Fixed design width so scale can grow equally into spare height (full-bleed width caps scale at 1).
     phoneAppWidth: 360,
     wideAppWidth: 400,
-    // Phone/iPad may scale up; real desktop caps at 1 so menu show/hide does not reflow header.
     capScaleAtOne: false,
     getCapScaleAtOne: function () {
-      return isDesktopLayout();
+      return true;
     },
-    // Desktop only: reserve vertical space so scale-down keeps buttons above the window edge.
     getTopBuffer: function () {
-      return isDesktopLayout() ? 88 : 0;
+      return 88;
     },
   });
-  fit.bindViewportListeners();
-  fit.bootLayout();
 
+  function bootLayout() {
+    if (isDesktopLayout()) {
+      pinPhoneStage(); // clears fluid styles
+      fit.bindViewportListeners();
+      fit.bootLayout();
+    } else {
+      pinPhoneStage();
+      window.addEventListener("resize", pinPhoneStage);
+      window.visualViewport?.addEventListener("resize", pinPhoneStage);
+      window.visualViewport?.addEventListener("scroll", pinPhoneStage);
+    }
+  }
+
+  bootLayout();
   paint();
 })();

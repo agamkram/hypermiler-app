@@ -69,38 +69,69 @@
       touch-action: manipulation;
     }
 
+    /*
+     * Phone / iPad: fluid fill (no transform scale). Stage = visible box;
+     * gauges flex:1 eat leftover height. Ends the scale/margin/padding hell.
+     * Desktop (fine pointer ≥900px): still uses FitToScreen scale below.
+     */
     .fit-stage {
       position: fixed;
       inset: 0;
       overflow: hidden;
       display: flex;
-      align-items: center;
-      justify-content: center;
-      /* Extra top inset keeps title clear of notch / Safari status; bottom stays tight. */
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: stretch;
+      /* ~1/16" breathing room above title over safe-area; bottom stays tight (Safari buttons OK). */
       padding:
-        max(0.4rem, env(safe-area-inset-top, 0px), 0.35in)
-        max(0.25rem, env(safe-area-inset-right, 0px))
-        max(0.2rem, env(safe-area-inset-bottom, 0px))
-        max(0.25rem, env(safe-area-inset-left, 0px));
+        max(0.0625in, env(safe-area-inset-top, 0px))
+        max(0.2rem, env(safe-area-inset-right, 0px))
+        max(0.0625in, env(safe-area-inset-bottom, 0px))
+        max(0.2rem, env(safe-area-inset-left, 0px));
+      box-sizing: border-box;
+    }
+
+    @media (display-mode: standalone) {
+      .fit-stage {
+        /* PWA: hug edges; home-indicator only */
+        padding-top: max(0.04in, env(safe-area-inset-top, 0px));
+        padding-bottom: max(0.04in, env(safe-area-inset-bottom, 0px));
+      }
     }
 
     .app {
       position: relative;
-      flex-shrink: 0;
-      width: min(24rem, 100%);
+      flex: 1 1 auto;
+      width: 100%;
+      max-width: none;
+      height: 100%;
+      min-height: 0;
       box-sizing: border-box;
-      padding: 0.55rem 0.6rem 0.65rem;
+      padding: 0.35rem 0.5rem 0.4rem;
       display: flex;
       flex-direction: column;
       gap: var(--app-gap);
-      transform: scale(1);
-      transform-origin: center center;
-      will-change: transform;
-      /* No margin-top — it created bottom dead space and fought the scaler. */
-      margin-top: 0;
+      transform: none;
+      margin: 0;
     }
 
     .app:not(.is-fitted) { visibility: hidden; }
+
+    .fit-stage--fluid .app {
+      transform: none !important;
+      width: 100% !important;
+      height: 100% !important;
+      max-width: none !important;
+    }
+
+    .app > header,
+    .app > .status,
+    .app > .speed-card,
+    .app > .score-card,
+    .app > .hint,
+    .app > .actions {
+      flex-shrink: 0;
+    }
 
     header { text-align: center; }
 
@@ -228,7 +259,9 @@
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 0.35rem;
-      flex: 0 0 auto;
+      flex: 1 1 auto;
+      min-height: 0;
+      align-items: stretch;
     }
 
     .gauge {
@@ -241,7 +274,8 @@
       flex-direction: column;
       align-items: center;
       gap: 0.28rem;
-      min-height: 14rem;
+      min-height: 0;
+      height: 100%;
       overflow: visible;
     }
 
@@ -264,7 +298,7 @@
     .bar-track {
       flex: 1 1 auto;
       width: 1.55rem;
-      min-height: 10.25rem;
+      min-height: 5rem;
       background: var(--surface-2);
       border-radius: 999px;
       position: relative;
