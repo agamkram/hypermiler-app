@@ -66,12 +66,23 @@
       return availW;
     }
 
+    function isStandaloneDisplay() {
+      try {
+        return (
+          root.matchMedia("(display-mode: standalone)").matches ||
+          root.navigator.standalone === true
+        );
+      } catch (_) {
+        return false;
+      }
+    }
+
     function syncFitStageViewport() {
       if (!ensureElements()) return;
       const vv = root.visualViewport;
-      // Phone/tablet Safari: pin stage to visible area so scale fits above toolbar.
-      // PWA is full-screen; still use vv when present (matches visible box).
-      if (!vv || !isPhoneLayout(root.innerWidth)) {
+      // Safari tab only: pin to visible viewport so buttons clear the toolbar.
+      // PWA: full edge stretch (inset:0) — no short box, no dead space under UI.
+      if (!vv || !isPhoneLayout(root.innerWidth) || isStandaloneDisplay()) {
         stage.style.top = "";
         stage.style.left = "";
         stage.style.right = "";
@@ -80,7 +91,6 @@
         stage.style.height = "";
         return;
       }
-      // Clear inset edges so top+height wins over CSS inset:0.
       stage.style.top = `${Math.max(0, Math.round(vv.offsetTop) || 0)}px`;
       stage.style.left = `${Math.max(0, Math.round(vv.offsetLeft) || 0)}px`;
       stage.style.right = "auto";
@@ -123,21 +133,25 @@
       if (!fitNaturalH || !fitNaturalW) return;
 
       const buffer = topBufferFor(layout);
+      const standalone = isStandaloneDisplay();
       const cs = root.getComputedStyle(stage);
       const padT = parseFloat(cs.paddingTop) || 0;
       const padB = parseFloat(cs.paddingBottom) || 0;
       const padL = parseFloat(cs.paddingLeft) || 0;
       const padR = parseFloat(cs.paddingRight) || 0;
-      // Keep Start/Pause/Reset above Safari chrome / safe padding.
-      const SAFETY = 14;
+      // Safari needs a little slack under buttons; PWA should fill (no short meters / gap).
+      const SAFETY = standalone ? 2 : 10;
       const contentH = Math.max(1, availH - padT - padB - buffer - SAFETY);
-      const contentW = Math.max(1, availW - padL - padR - 4);
+      const contentW = Math.max(1, availW - padL - padR - (standalone ? 0 : 2));
       let scale = Math.min(contentH / fitNaturalH, contentW / fitNaturalW);
       const capAtOne = getCapScaleAtOne
         ? getCapScaleAtOne(layout, availW, availH)
         : capScaleAtOne;
       if (capAtOne) scale = Math.min(scale, 1);
       if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+
+      // PWA: center so spare space is even. Safari: top so toolbar doesn't eat buttons.
+      app.style.transformOrigin = standalone ? "center center" : "top center";
 
       if (
         layoutReady &&
