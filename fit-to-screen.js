@@ -69,17 +69,24 @@
     function syncFitStageViewport() {
       if (!ensureElements()) return;
       const vv = root.visualViewport;
+      // Phone/tablet Safari: pin stage to visible area so scale fits above toolbar.
+      // PWA is full-screen; still use vv when present (matches visible box).
       if (!vv || !isPhoneLayout(root.innerWidth)) {
         stage.style.top = "";
         stage.style.left = "";
+        stage.style.right = "";
+        stage.style.bottom = "";
         stage.style.width = "";
         stage.style.height = "";
         return;
       }
-      stage.style.top = `${vv.offsetTop}px`;
-      stage.style.left = `${vv.offsetLeft}px`;
-      stage.style.width = `${vv.width}px`;
-      stage.style.height = `${vv.height}px`;
+      // Clear inset edges so top+height wins over CSS inset:0.
+      stage.style.top = `${Math.max(0, Math.round(vv.offsetTop) || 0)}px`;
+      stage.style.left = `${Math.max(0, Math.round(vv.offsetLeft) || 0)}px`;
+      stage.style.right = "auto";
+      stage.style.bottom = "auto";
+      stage.style.width = `${Math.round(vv.width)}px`;
+      stage.style.height = `${Math.round(vv.height)}px`;
     }
 
     function viewportSizeMatchesFit() {
@@ -116,14 +123,21 @@
       if (!fitNaturalH || !fitNaturalW) return;
 
       const buffer = topBufferFor(layout);
-      let scale = Math.min(
-        (availH - buffer) / fitNaturalH,
-        availW / fitNaturalW
-      );
+      const cs = root.getComputedStyle(stage);
+      const padT = parseFloat(cs.paddingTop) || 0;
+      const padB = parseFloat(cs.paddingBottom) || 0;
+      const padL = parseFloat(cs.paddingLeft) || 0;
+      const padR = parseFloat(cs.paddingRight) || 0;
+      // Keep Start/Pause/Reset above Safari chrome / safe padding.
+      const SAFETY = 14;
+      const contentH = Math.max(1, availH - padT - padB - buffer - SAFETY);
+      const contentW = Math.max(1, availW - padL - padR - 4);
+      let scale = Math.min(contentH / fitNaturalH, contentW / fitNaturalW);
       const capAtOne = getCapScaleAtOne
         ? getCapScaleAtOne(layout, availW, availH)
         : capScaleAtOne;
       if (capAtOne) scale = Math.min(scale, 1);
+      if (!Number.isFinite(scale) || scale <= 0) scale = 1;
 
       if (
         layoutReady &&

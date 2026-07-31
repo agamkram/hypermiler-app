@@ -32,7 +32,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Michroma&display=swap"
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@500;600&family=Michroma&display=swap"
     rel="stylesheet"
   />
   <style>
@@ -79,7 +79,7 @@
       padding:
         max(0.15rem, env(safe-area-inset-top))
         max(0.25rem, env(safe-area-inset-right))
-        max(0.15rem, env(safe-area-inset-bottom))
+        max(0.2rem, env(safe-area-inset-bottom))
         max(0.25rem, env(safe-area-inset-left));
     }
 
@@ -93,10 +93,10 @@
       flex-direction: column;
       gap: var(--app-gap);
       transform: scale(1);
-      transform-origin: center center;
+      /* Top origin: spare height stays below controls (Safari toolbar). */
+      transform-origin: top center;
       will-change: transform;
-      /* Top clearance so heading clears chrome; spare room at bottom */
-      margin-top: calc(0.1875in + 10px);
+      margin-top: calc(0.12in + 6px);
     }
 
     .app:not(.is-fitted) { visibility: hidden; }
@@ -599,8 +599,8 @@
     </main>
   </div>
 
-  <script src="fit-to-screen.js"></script>
-  <script src="app.js"></script>
+  <script src="fit-to-screen.js?v=safari-btn1"></script>
+  <script src="app.js?v=safari-btn1"></script>
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
   </script>
