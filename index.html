@@ -104,7 +104,7 @@
       flex: 1 1 auto;
       width: 100%;
       max-width: none;
-      height: 100%;
+      height: auto;
       min-height: 0;
       box-sizing: border-box;
       padding: 0.35rem 0.5rem 0.4rem;
@@ -117,11 +117,27 @@
 
     .app:not(.is-fitted) { visibility: hidden; }
 
+    .fit-stage--fluid {
+      /* Definite flex column so .gauges flex-grow actually receives leftover px */
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      justify-content: stretch !important;
+    }
+
     .fit-stage--fluid .app {
       transform: none !important;
       width: 100% !important;
-      height: 100% !important;
       max-width: none !important;
+      flex: 1 1 auto !important;
+      min-height: 0 !important;
+      height: auto !important;
+    }
+
+    /* PWA: slightly tighter pad so meters claim the extra chrome-free height */
+    .fit-stage--fluid.is-standalone {
+      padding-top: max(0.03in, env(safe-area-inset-top, 0px));
+      padding-bottom: max(0.03in, env(safe-area-inset-bottom, 0px));
     }
 
     .app > header,
@@ -259,7 +275,8 @@
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 0.35rem;
-      flex: 1 1 auto;
+      /* flex-basis 0: free space goes to meters (not stuck at content size) */
+      flex: 1 1 0;
       min-height: 0;
       align-items: stretch;
     }
@@ -296,9 +313,9 @@
     }
 
     .bar-track {
-      flex: 1 1 auto;
+      flex: 1 1 0;
       width: 1.55rem;
-      min-height: 5rem;
+      min-height: 4.5rem;
       background: var(--surface-2);
       border-radius: 999px;
       position: relative;
@@ -514,26 +531,41 @@
 
     /*
      * Mac / PC only — NOT iPad.
-     * Tablets are often ≥768px wide; require fine pointer + hover so touch iPads keep phone layout.
+     * Desktop keeps FitToScreen scale; phone/iPad stay fluid above.
      */
     @media (hover: hover) and (pointer: fine) and (min-width: 900px) {
       .fit-stage {
-        /* Top-anchor: auto-hide browser chrome shouldn't center-shift the header under the menu */
         align-items: flex-start;
         justify-content: center;
         overflow-x: hidden;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         padding-top: max(1.75rem, env(safe-area-inset-top));
-        /* Extra room so Start/Pause/Reset clear the window bottom */
         padding-bottom: max(2.25rem, env(safe-area-inset-bottom));
       }
 
-      .app {
+      .fit-stage:not(.fit-stage--fluid) .app {
+        flex: 0 0 auto;
+        width: min(24rem, 100%);
+        height: auto;
+        max-width: 24rem;
         margin-top: 0.35rem;
         margin-bottom: 1.1rem;
-        /* Scale from top so height shrinks don't pull the title into chrome */
         transform-origin: top center;
+        will-change: transform;
+      }
+
+      .fit-stage:not(.fit-stage--fluid) .gauges {
+        flex: 0 0 auto;
+      }
+
+      .fit-stage:not(.fit-stage--fluid) .gauge {
+        min-height: 14rem;
+        height: auto;
+      }
+
+      .fit-stage:not(.fit-stage--fluid) .bar-track {
+        min-height: 10.25rem;
       }
     }
   </style>
@@ -634,8 +666,8 @@
     </main>
   </div>
 
-  <script src="fit-to-screen.js?v=safari-btn3"></script>
-  <script src="app.js?v=safari-btn3"></script>
+  <script src="fit-to-screen.js?v=fluid2"></script>
+  <script src="app.js?v=fluid2"></script>
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
   </script>

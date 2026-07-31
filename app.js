@@ -940,6 +940,7 @@
 
     if (isDesktopLayout()) {
       stage.classList.remove("fit-stage--fluid");
+      stage.classList.remove("is-standalone");
       stage.style.top = "";
       stage.style.left = "";
       stage.style.right = "";
@@ -950,6 +951,8 @@
       app.style.width = "";
       app.style.height = "";
       app.style.maxWidth = "";
+      app.style.flex = "";
+      app.style.minHeight = "";
       app.style.transform = "";
       return;
     }
@@ -958,29 +961,38 @@
     stage.style.position = "fixed";
     const vv = window.visualViewport;
     const standalone = isStandaloneDisplay();
+    stage.classList.toggle("is-standalone", standalone);
 
-    if (!standalone && vv && vv.height > 40 && vv.width > 40) {
-      // Safari tab: visible viewport only (bottom toolbar already accounted for)
-      stage.style.top = `${Math.max(0, Math.round(vv.offsetTop) || 0)}px`;
-      stage.style.left = `${Math.max(0, Math.round(vv.offsetLeft) || 0)}px`;
-      stage.style.width = `${Math.round(vv.width)}px`;
-      stage.style.height = `${Math.round(vv.height)}px`;
-      stage.style.right = "auto";
-      stage.style.bottom = "auto";
-    } else {
-      // PWA / full screen
-      stage.style.top = "0";
-      stage.style.left = "0";
-      stage.style.right = "0";
-      stage.style.bottom = "0";
-      stage.style.width = "";
-      stage.style.height = "";
+    // Always set explicit px size so flex children (meters) get a definite height.
+    // Inset:0 alone often leaves height "auto" on iOS and gauges never grow in PWA.
+    let top = 0;
+    let left = 0;
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+    if (vv && vv.height > 40 && vv.width > 40) {
+      top = Math.max(0, Math.round(vv.offsetTop) || 0);
+      left = Math.max(0, Math.round(vv.offsetLeft) || 0);
+      width = Math.round(vv.width);
+      height = Math.round(vv.height);
+      // PWA: prefer the larger of vv / innerHeight so we use full screen.
+      if (standalone) {
+        height = Math.max(height, Math.round(window.innerHeight - top));
+        width = Math.max(width, Math.round(window.innerWidth - left));
+      }
     }
+
+    stage.style.top = `${top}px`;
+    stage.style.left = `${left}px`;
+    stage.style.width = `${width}px`;
+    stage.style.height = `${height}px`;
+    stage.style.right = "auto";
+    stage.style.bottom = "auto";
 
     app.style.transform = "none";
     app.style.width = "100%";
     app.style.maxWidth = "none";
-    app.style.height = "100%";
+    app.style.height = "auto";
+    app.style.flex = "1 1 auto";
     app.style.minHeight = "0";
     app.classList.add("is-fitted");
   }
