@@ -27,17 +27,17 @@
   <meta name="twitter:image" content="https://hypermiler.markmaga.com/icon-512.png" />
   <title>HyperMiler</title>
   <!--
-    Geometry BEFORE first paint.
-    Safari tab → visualViewport (short, above toolbar).
-    PWA → full device height (screen), NEVER short VV — that caused the jump
-    and left the home-screen app stuck at Safari-height.
+    Desktop Bottom:full bleed.txt — Bug B (PWA short layout viewport).
+    PWA: fillH = max(innerHeight, screen long edge) BEFORE first paint.
+    Safari tab: visualViewport only. Do NOT use max-height:100dvh on PWA.
   -->
   <script>
     (function () {
       try {
         var r = document.documentElement;
+        var n = window.navigator;
         var standalone =
-          (window.navigator && window.navigator.standalone === true) ||
+          n.standalone === true ||
           (window.matchMedia &&
             (window.matchMedia("(display-mode: standalone)").matches ||
               window.matchMedia("(display-mode: fullscreen)").matches ||
@@ -49,32 +49,33 @@
         var sh = (window.screen && window.screen.height) || 0;
         var screenMax = Math.max(sw, sh);
         var screenMin = Math.min(sw, sh);
-        var top = 0;
-        var left = 0;
-        var w = iw;
-        var h = ih;
+
         if (standalone) {
-          // Drawable box — not full screen.* (that overshoots home indicator)
-          var portrait = ih >= iw;
-          h = Math.max(ih, (vv && vv.height) || 0);
-          w = Math.max(iw, (vv && vv.width) || 0);
-          var longEdge = portrait ? screenMax : screenMin;
-          var shortEdge = portrait ? screenMin : screenMax;
-          if (longEdge > 0 && h < longEdge * 0.82) h = longEdge;
-          if (shortEdge > 0 && w < shortEdge * 0.82) w = shortEdge;
-          top = 0;
-          left = 0;
-          r.classList.add("is-standalone");
+          r.classList.add("pwa-standalone");
+          /* Phone: fillH = max(ih, screen axis). Portrait → long edge. */
+          var fillH = ih >= iw ? Math.max(ih, screenMax) : Math.max(ih, screenMin);
+          var extra = 0;
+          /* iPad: screen often undershoots inner → safe-area extra */
+          if (Math.min(iw, ih) >= 600 && screenMax < ih - 10) {
+            extra = 20;
+          }
+          r.style.setProperty("--pwa-fill-h", fillH + "px");
+          r.style.setProperty("--pwa-extra-b", extra + "px");
+          r.style.setProperty("--vv-top", "0px");
+          r.style.setProperty("--vv-left", "0px");
+          r.style.setProperty("--vv-w", iw + "px");
+          r.style.setProperty("--vv-h", fillH + extra + "px");
         } else if (vv && vv.height > 40 && vv.width > 40) {
-          top = Math.max(0, Math.round(vv.offsetTop) || 0);
-          left = Math.max(0, Math.round(vv.offsetLeft) || 0);
-          w = Math.round(vv.width);
-          h = Math.round(vv.height);
+          r.style.setProperty("--vv-top", Math.max(0, Math.round(vv.offsetTop) || 0) + "px");
+          r.style.setProperty("--vv-left", Math.max(0, Math.round(vv.offsetLeft) || 0) + "px");
+          r.style.setProperty("--vv-w", Math.round(vv.width) + "px");
+          r.style.setProperty("--vv-h", Math.round(vv.height) + "px");
+        } else {
+          r.style.setProperty("--vv-top", "0px");
+          r.style.setProperty("--vv-left", "0px");
+          r.style.setProperty("--vv-w", iw + "px");
+          r.style.setProperty("--vv-h", ih + "px");
         }
-        r.style.setProperty("--vv-top", top + "px");
-        r.style.setProperty("--vv-left", left + "px");
-        r.style.setProperty("--vv-w", (w || iw) + "px");
-        r.style.setProperty("--vv-h", (h || ih) + "px");
       } catch (e) {}
     })();
   </script>
@@ -103,23 +104,18 @@
       --red: #f87171;
       --border: rgba(255, 255, 255, 0.08);
       --app-gap: 0.5rem;
-      /* Safari fallback = short viewport; PWA head script overwrites with screen H */
       --vv-top: 0px;
       --vv-left: 0px;
       --vv-w: 100vw;
       --vv-h: 100svh;
-    }
-
-    /* PWA: prefer large viewport until script sets screen px (avoid short-settle) */
-    html.is-standalone {
-      --vv-h: 100dvh;
+      --pwa-fill-h: 100%;
+      --pwa-extra-b: 0px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     html, body {
       height: 100%;
-      max-height: 100dvh;
       overflow: hidden;
       background: var(--bg);
       color: var(--text);
@@ -131,14 +127,20 @@
       touch-action: manipulation;
     }
 
+    /* Bug B fix: lock stack to screen height (not short inner / 100dvh). */
+    html.pwa-standalone,
+    html.pwa-standalone body {
+      height: calc(var(--pwa-fill-h, 100%) + var(--pwa-extra-b, 0px));
+      min-height: calc(var(--pwa-fill-h, 100%) + var(--pwa-extra-b, 0px));
+      max-height: none;
+    }
+
     /*
-     * Phone / iPad: fluid fill (no transform scale). Stage = visible box;
-     * gauges flex:1 eat leftover height. Ends the scale/margin/padding hell.
-     * Desktop (fine pointer ≥900px): still uses FitToScreen scale below.
+     * Phone / iPad: fluid fill. Safari = VV box. PWA = screen fillH.
+     * Desktop (fine pointer ≥900px): FitToScreen scale.
      */
     .fit-stage {
       position: fixed;
-      /* Use pre-paint VV vars — never tall inset:0 that later shrinks (flash). */
       top: var(--vv-top, 0px);
       left: var(--vv-left, 0px);
       width: var(--vv-w, 100vw);
@@ -150,20 +152,26 @@
       flex-direction: column;
       align-items: stretch;
       justify-content: stretch;
-      /* ~1/16" over safe-area; bottom tight (Safari buttons stay good). */
       padding:
         max(0.0625in, env(safe-area-inset-top, 0px))
         max(0.2rem, env(safe-area-inset-right, 0px))
-        max(0.0625in, env(safe-area-inset-bottom, 0px))
+        max(0.05in, env(safe-area-inset-bottom, 0px))
         max(0.2rem, env(safe-area-inset-left, 0px));
       box-sizing: border-box;
     }
 
-    html.is-standalone .fit-stage,
-    .fit-stage--fluid.is-standalone {
+    html.pwa-standalone .fit-stage {
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: auto;
+      width: 100%;
+      height: calc(var(--pwa-fill-h, 100%) + var(--pwa-extra-b, 0px));
       padding-top: max(0.04in, env(safe-area-inset-top, 0px));
-      /* ~5/16" below buttons was empty while buttons clipped — keep that band as pad */
-      padding-bottom: max(0.3125in, env(safe-area-inset-bottom, 0px));
+      /* Note §5: after fill works, pad controls for home indicator */
+      padding-bottom: max(0.12in, env(safe-area-inset-bottom, 0px));
+      padding-left: max(0.2rem, env(safe-area-inset-left, 0px));
+      padding-right: max(0.2rem, env(safe-area-inset-right, 0px));
     }
 
     .app {
@@ -174,7 +182,7 @@
       height: auto;
       min-height: 0;
       box-sizing: border-box;
-      padding: 0.35rem 0.5rem 0.4rem;
+      padding: 0.35rem 0.5rem 0.25rem;
       display: flex;
       flex-direction: column;
       gap: var(--app-gap);
@@ -185,7 +193,6 @@
     .app:not(.is-fitted) { visibility: hidden; }
 
     .fit-stage--fluid {
-      /* Definite flex column so .gauges flex-grow actually receives leftover px */
       display: flex !important;
       flex-direction: column !important;
       align-items: stretch !important;
@@ -201,10 +208,9 @@
       height: auto !important;
     }
 
-    /* PWA: slightly tighter pad so meters claim the extra chrome-free height */
-    .fit-stage--fluid.is-standalone {
-      padding-top: max(0.03in, env(safe-area-inset-top, 0px));
-      padding-bottom: max(0.03in, env(safe-area-inset-bottom, 0px));
+    html.pwa-standalone .actions {
+      /* After fillH works, lift controls above home indicator (bleed note §5) */
+      padding-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px));
     }
 
     .app > header,
@@ -733,8 +739,8 @@
     </main>
   </div>
 
-  <script src="fit-to-screen.js?v=fluid5"></script>
-  <script src="app.js?v=fluid5"></script>
+  <script src="fit-to-screen.js?v=fluid6"></script>
+  <script src="app.js?v=fluid6"></script>
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
   </script>

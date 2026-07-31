@@ -935,33 +935,59 @@
     }
   }
 
-  /** Safari tab = short VV. PWA = full device (screen), never short VV. */
-  function measurePhoneStageBox() {
+  /** Desktop Bottom:full bleed Bug B — PWA fillH from screen, not short VV. */
+  function pwaFillHeightPx() {
     const iw = window.innerWidth || 0;
     const ih = window.innerHeight || 0;
     const sw = window.screen?.width || 0;
     const sh = window.screen?.height || 0;
     const screenMax = Math.max(sw, sh);
     const screenMin = Math.min(sw, sh);
+    return ih >= iw ? Math.max(ih, screenMax) : Math.max(ih, screenMin);
+  }
+
+  function pwaExtraBottomPx() {
+    const iw = window.innerWidth || 0;
+    const ih = window.innerHeight || 0;
+    const sw = window.screen?.width || 0;
+    const sh = window.screen?.height || 0;
+    const screenMax = Math.max(sw, sh);
+    // iPad: screen often undershoots inner
+    if (Math.min(iw, ih) >= 600 && screenMax < ih - 10) {
+      const inset =
+        parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue(
+            "env(safe-area-inset-bottom)"
+          )
+        ) || 0;
+      // env() can't be read this way — use visual probe
+      const probe = document.createElement("div");
+      probe.style.cssText =
+        "position:fixed;visibility:hidden;padding-bottom:env(safe-area-inset-bottom,0px)";
+      document.body.appendChild(probe);
+      const pb = parseFloat(getComputedStyle(probe).paddingBottom) || 0;
+      probe.remove();
+      return Math.max(pb, 20);
+    }
+    return 0;
+  }
+
+  function measurePhoneStageBox() {
+    const iw = window.innerWidth || 0;
+    const ih = window.innerHeight || 0;
     const standalone = isStandaloneDisplay();
     const vv = window.visualViewport;
 
     if (standalone) {
-      const portrait = ih >= iw;
-      // Drawable height only. Using full screen.* overshoots into the home-
-      // indicator band — buttons clipped with empty space still visible below.
-      let height = Math.max(ih, (vv && vv.height) || 0);
-      let width = Math.max(iw, (vv && vv.width) || 0);
-      // Only boost with screen when innerHeight clearly undershoots (iPad)
-      const longEdge = portrait ? screenMax : screenMin;
-      if (longEdge > 0 && height < longEdge * 0.82) height = longEdge;
-      const shortEdge = portrait ? screenMin : screenMax;
-      if (shortEdge > 0 && width < shortEdge * 0.82) width = shortEdge;
+      const fillH = pwaFillHeightPx();
+      const extra = pwaExtraBottomPx();
       return {
         top: 0,
         left: 0,
-        width: width || iw,
-        height: height || ih,
+        width: iw,
+        height: fillH + extra,
+        fillH,
+        extra,
         standalone: true,
       };
     }
@@ -972,10 +998,20 @@
         left: Math.max(0, Math.round(vv.offsetLeft) || 0),
         width: Math.round(vv.width),
         height: Math.round(vv.height),
+        fillH: 0,
+        extra: 0,
         standalone: false,
       };
     }
-    return { top: 0, left: 0, width: iw, height: ih, standalone: false };
+    return {
+      top: 0,
+      left: 0,
+      width: iw,
+      height: ih,
+      fillH: 0,
+      extra: 0,
+      standalone: false,
+    };
   }
 
   function pinPhoneStage() {
@@ -987,11 +1023,13 @@
     if (isDesktopLayout()) {
       stage.classList.remove("fit-stage--fluid");
       stage.classList.remove("is-standalone");
-      root.classList.remove("is-standalone");
+      root.classList.remove("pwa-standalone");
       root.style.removeProperty("--vv-top");
       root.style.removeProperty("--vv-left");
       root.style.removeProperty("--vv-w");
       root.style.removeProperty("--vv-h");
+      root.style.removeProperty("--pwa-fill-h");
+      root.style.removeProperty("--pwa-extra-b");
       stage.style.top = "";
       stage.style.left = "";
       stage.style.right = "";
@@ -1011,20 +1049,39 @@
     stage.classList.add("fit-stage--fluid");
     stage.style.position = "fixed";
     const box = measurePhoneStageBox();
-    stage.classList.toggle("is-standalone", box.standalone);
-    root.classList.toggle("is-standalone", box.standalone);
 
-    root.style.setProperty("--vv-top", `${box.top}px`);
-    root.style.setProperty("--vv-left", `${box.left}px`);
-    root.style.setProperty("--vv-w", `${box.width}px`);
-    root.style.setProperty("--vv-h", `${box.height}px`);
-
-    stage.style.top = `${box.top}px`;
-    stage.style.left = `${box.left}px`;
-    stage.style.width = `${box.width}px`;
-    stage.style.height = `${box.height}px`;
-    stage.style.right = "auto";
-    stage.style.bottom = "auto";
+    if (box.standalone) {
+      root.classList.add("pwa-standalone");
+      stage.classList.add("is-standalone");
+      root.style.setProperty("--pwa-fill-h", `${box.fillH}px`);
+      root.style.setProperty("--pwa-extra-b", `${box.extra}px`);
+      root.style.setProperty("--vv-top", "0px");
+      root.style.setProperty("--vv-left", "0px");
+      root.style.setProperty("--vv-w", `${box.width}px`);
+      root.style.setProperty("--vv-h", `${box.height}px`);
+      // Prefer CSS calc height; clear conflicting inline that can fight fillH
+      stage.style.top = "0";
+      stage.style.left = "0";
+      stage.style.right = "0";
+      stage.style.bottom = "auto";
+      stage.style.width = "100%";
+      stage.style.height = `calc(var(--pwa-fill-h) + var(--pwa-extra-b, 0px))`;
+    } else {
+      root.classList.remove("pwa-standalone");
+      stage.classList.remove("is-standalone");
+      root.style.removeProperty("--pwa-fill-h");
+      root.style.removeProperty("--pwa-extra-b");
+      root.style.setProperty("--vv-top", `${box.top}px`);
+      root.style.setProperty("--vv-left", `${box.left}px`);
+      root.style.setProperty("--vv-w", `${box.width}px`);
+      root.style.setProperty("--vv-h", `${box.height}px`);
+      stage.style.top = `${box.top}px`;
+      stage.style.left = `${box.left}px`;
+      stage.style.width = `${box.width}px`;
+      stage.style.height = `${box.height}px`;
+      stage.style.right = "auto";
+      stage.style.bottom = "auto";
+    }
 
     app.style.transform = "none";
     app.style.width = "100%";
@@ -1052,16 +1109,21 @@
 
   function bootLayout() {
     if (isDesktopLayout()) {
-      pinPhoneStage(); // clears fluid styles
+      pinPhoneStage();
       fit.bindViewportListeners();
       fit.bootLayout();
     } else {
       pinPhoneStage();
       window.addEventListener("resize", pinPhoneStage);
-      // Safari only: VV changes with toolbar. PWA must NOT re-pin to short VV.
       if (!isStandaloneDisplay()) {
         window.visualViewport?.addEventListener("resize", pinPhoneStage);
         window.visualViewport?.addEventListener("scroll", pinPhoneStage);
+      } else {
+        // PWA: re-sync fillH after orientation; never pin short VV
+        window.addEventListener("orientationchange", () => {
+          setTimeout(pinPhoneStage, 50);
+          setTimeout(pinPhoneStage, 300);
+        });
       }
     }
   }
