@@ -936,11 +936,17 @@
   function pinPhoneStage() {
     const stage = document.getElementById("fit-stage");
     const app = document.getElementById("app");
+    const root = document.documentElement;
     if (!stage || !app) return;
 
     if (isDesktopLayout()) {
       stage.classList.remove("fit-stage--fluid");
       stage.classList.remove("is-standalone");
+      root.classList.remove("is-standalone");
+      root.style.removeProperty("--vv-top");
+      root.style.removeProperty("--vv-left");
+      root.style.removeProperty("--vv-w");
+      root.style.removeProperty("--vv-h");
       stage.style.top = "";
       stage.style.left = "";
       stage.style.right = "";
@@ -962,24 +968,28 @@
     const vv = window.visualViewport;
     const standalone = isStandaloneDisplay();
     stage.classList.toggle("is-standalone", standalone);
+    root.classList.toggle("is-standalone", standalone);
 
-    // Always set explicit px size so flex children (meters) get a definite height.
-    // Inset:0 alone often leaves height "auto" on iOS and gauges never grow in PWA.
+    // Same geometry as head bootstrap — keep CSS vars + inline in sync (no jump).
     let top = 0;
     let left = 0;
-    let width = window.innerWidth;
-    let height = window.innerHeight;
+    let width = window.innerWidth || 0;
+    let height = window.innerHeight || 0;
     if (vv && vv.height > 40 && vv.width > 40) {
       top = Math.max(0, Math.round(vv.offsetTop) || 0);
       left = Math.max(0, Math.round(vv.offsetLeft) || 0);
       width = Math.round(vv.width);
       height = Math.round(vv.height);
-      // PWA: prefer the larger of vv / innerHeight so we use full screen.
       if (standalone) {
-        height = Math.max(height, Math.round(window.innerHeight - top));
-        width = Math.max(width, Math.round(window.innerWidth - left));
+        height = Math.max(height, Math.round((window.innerHeight || height) - top));
+        width = Math.max(width, Math.round((window.innerWidth || width) - left));
       }
     }
+
+    root.style.setProperty("--vv-top", `${top}px`);
+    root.style.setProperty("--vv-left", `${left}px`);
+    root.style.setProperty("--vv-w", `${width}px`);
+    root.style.setProperty("--vv-h", `${height}px`);
 
     stage.style.top = `${top}px`;
     stage.style.left = `${left}px`;

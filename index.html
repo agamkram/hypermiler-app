@@ -26,6 +26,42 @@
   <meta name="twitter:description" content="Live g-forces and trip smoothness score for calmer driving." />
   <meta name="twitter:image" content="https://hypermiler.markmaga.com/icon-512.png" />
   <title>HyperMiler</title>
+  <!--
+    Pin visible viewport BEFORE first paint. Without this, CSS inset:0 paints the
+    tall layout viewport, then JS shrinks to visualViewport and the UI jumps up
+    to the Safari toolbar (the flash you saw).
+  -->
+  <script>
+    (function () {
+      try {
+        var r = document.documentElement;
+        var standalone =
+          (window.navigator && window.navigator.standalone === true) ||
+          (window.matchMedia &&
+            window.matchMedia("(display-mode: standalone)").matches);
+        var vv = window.visualViewport;
+        var top = 0;
+        var left = 0;
+        var w = window.innerWidth || 0;
+        var h = window.innerHeight || 0;
+        if (vv && vv.height > 40 && vv.width > 40) {
+          top = Math.max(0, Math.round(vv.offsetTop) || 0);
+          left = Math.max(0, Math.round(vv.offsetLeft) || 0);
+          w = Math.round(vv.width);
+          h = Math.round(vv.height);
+          if (standalone) {
+            h = Math.max(h, Math.round((window.innerHeight || h) - top));
+            w = Math.max(w, Math.round((window.innerWidth || w) - left));
+          }
+        }
+        r.style.setProperty("--vv-top", top + "px");
+        r.style.setProperty("--vv-left", left + "px");
+        r.style.setProperty("--vv-w", w + "px");
+        r.style.setProperty("--vv-h", h + "px");
+        if (standalone) r.classList.add("is-standalone");
+      } catch (e) {}
+    })();
+  </script>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" href="icon-192.png" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
@@ -51,6 +87,11 @@
       --red: #f87171;
       --border: rgba(255, 255, 255, 0.08);
       --app-gap: 0.5rem;
+      /* Fallbacks if head script has not run: small viewport = chrome expanded */
+      --vv-top: 0px;
+      --vv-left: 0px;
+      --vv-w: 100vw;
+      --vv-h: 100svh;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -76,13 +117,19 @@
      */
     .fit-stage {
       position: fixed;
-      inset: 0;
+      /* Use pre-paint VV vars — never tall inset:0 that later shrinks (flash). */
+      top: var(--vv-top, 0px);
+      left: var(--vv-left, 0px);
+      width: var(--vv-w, 100vw);
+      height: var(--vv-h, 100svh);
+      right: auto;
+      bottom: auto;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       align-items: stretch;
       justify-content: stretch;
-      /* ~1/16" breathing room above title over safe-area; bottom stays tight (Safari buttons OK). */
+      /* ~1/16" over safe-area; bottom tight (Safari buttons stay good). */
       padding:
         max(0.0625in, env(safe-area-inset-top, 0px))
         max(0.2rem, env(safe-area-inset-right, 0px))
@@ -91,12 +138,10 @@
       box-sizing: border-box;
     }
 
-    @media (display-mode: standalone) {
-      .fit-stage {
-        /* PWA: hug edges; home-indicator only */
-        padding-top: max(0.04in, env(safe-area-inset-top, 0px));
-        padding-bottom: max(0.04in, env(safe-area-inset-bottom, 0px));
-      }
+    html.is-standalone .fit-stage,
+    .fit-stage--fluid.is-standalone {
+      padding-top: max(0.03in, env(safe-area-inset-top, 0px));
+      padding-bottom: max(0.03in, env(safe-area-inset-bottom, 0px));
     }
 
     .app {
@@ -666,8 +711,8 @@
     </main>
   </div>
 
-  <script src="fit-to-screen.js?v=fluid2"></script>
-  <script src="app.js?v=fluid2"></script>
+  <script src="fit-to-screen.js?v=fluid3"></script>
+  <script src="app.js?v=fluid3"></script>
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
   </script>
