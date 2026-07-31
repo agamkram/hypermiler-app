@@ -127,7 +127,7 @@
       touch-action: manipulation;
     }
 
-    /* Bug B fix: lock stack to screen height (not short inner / 100dvh). */
+    /* Bug B: lock to screen fillH (Desktop note). No max-height:100dvh. */
     html.pwa-standalone,
     html.pwa-standalone body {
       height: calc(var(--pwa-fill-h, 100%) + var(--pwa-extra-b, 0px));
@@ -135,10 +135,6 @@
       max-height: none;
     }
 
-    /*
-     * Phone / iPad: fluid fill. Safari = VV box. PWA = screen fillH.
-     * Desktop (fine pointer ≥900px): FitToScreen scale.
-     */
     .fit-stage {
       position: fixed;
       top: var(--vv-top, 0px);
@@ -155,11 +151,12 @@
       padding:
         max(0.0625in, env(safe-area-inset-top, 0px))
         max(0.2rem, env(safe-area-inset-right, 0px))
-        max(0.05in, env(safe-area-inset-bottom, 0px))
+        0
         max(0.2rem, env(safe-area-inset-left, 0px));
       box-sizing: border-box;
     }
 
+    /* PWA: geometry from CSS vars only (head script). ONE safe-area pad on actions. */
     html.pwa-standalone .fit-stage {
       top: 0;
       left: 0;
@@ -168,10 +165,9 @@
       width: 100%;
       height: calc(var(--pwa-fill-h, 100%) + var(--pwa-extra-b, 0px));
       padding-top: max(0.04in, env(safe-area-inset-top, 0px));
-      /* Note §5: after fill works, pad controls for home indicator */
-      padding-bottom: max(0.12in, env(safe-area-inset-bottom, 0px));
-      padding-left: max(0.2rem, env(safe-area-inset-left, 0px));
       padding-right: max(0.2rem, env(safe-area-inset-right, 0px));
+      padding-bottom: 0;
+      padding-left: max(0.2rem, env(safe-area-inset-left, 0px));
     }
 
     .app {
@@ -182,7 +178,7 @@
       height: auto;
       min-height: 0;
       box-sizing: border-box;
-      padding: 0.35rem 0.5rem 0.25rem;
+      padding: 0.35rem 0.5rem 0;
       display: flex;
       flex-direction: column;
       gap: var(--app-gap);
@@ -190,7 +186,9 @@
       margin: 0;
     }
 
+    /* Show immediately when head already sized the stage (no hide→show jump) */
     .app:not(.is-fitted) { visibility: hidden; }
+    html.pwa-standalone .app { visibility: visible; }
 
     .fit-stage--fluid {
       display: flex !important;
@@ -208,9 +206,9 @@
       height: auto !important;
     }
 
+    /* Single bottom pad — env only, no stacked 0.12in + 0.35rem + env */
     html.pwa-standalone .actions {
-      /* After fillH works, lift controls above home indicator (bleed note §5) */
-      padding-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px));
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
     .app > header,
@@ -739,8 +737,8 @@
     </main>
   </div>
 
-  <script src="fit-to-screen.js?v=fluid6"></script>
-  <script src="app.js?v=fluid6"></script>
+  <script src="fit-to-screen.js?v=fluid7"></script>
+  <script src="app.js?v=fluid7"></script>
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
   </script>

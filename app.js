@@ -935,7 +935,6 @@
     }
   }
 
-  /** Desktop Bottom:full bleed Bug B — PWA fillH from screen, not short VV. */
   function pwaFillHeightPx() {
     const iw = window.innerWidth || 0;
     const ih = window.innerHeight || 0;
@@ -952,15 +951,7 @@
     const sw = window.screen?.width || 0;
     const sh = window.screen?.height || 0;
     const screenMax = Math.max(sw, sh);
-    // iPad: screen often undershoots inner
     if (Math.min(iw, ih) >= 600 && screenMax < ih - 10) {
-      const inset =
-        parseFloat(
-          getComputedStyle(document.documentElement).getPropertyValue(
-            "env(safe-area-inset-bottom)"
-          )
-        ) || 0;
-      // env() can't be read this way — use visual probe
       const probe = document.createElement("div");
       probe.style.cssText =
         "position:fixed;visibility:hidden;padding-bottom:env(safe-area-inset-bottom,0px)";
@@ -972,48 +963,6 @@
     return 0;
   }
 
-  function measurePhoneStageBox() {
-    const iw = window.innerWidth || 0;
-    const ih = window.innerHeight || 0;
-    const standalone = isStandaloneDisplay();
-    const vv = window.visualViewport;
-
-    if (standalone) {
-      const fillH = pwaFillHeightPx();
-      const extra = pwaExtraBottomPx();
-      return {
-        top: 0,
-        left: 0,
-        width: iw,
-        height: fillH + extra,
-        fillH,
-        extra,
-        standalone: true,
-      };
-    }
-
-    if (vv && vv.height > 40 && vv.width > 40) {
-      return {
-        top: Math.max(0, Math.round(vv.offsetTop) || 0),
-        left: Math.max(0, Math.round(vv.offsetLeft) || 0),
-        width: Math.round(vv.width),
-        height: Math.round(vv.height),
-        fillH: 0,
-        extra: 0,
-        standalone: false,
-      };
-    }
-    return {
-      top: 0,
-      left: 0,
-      width: iw,
-      height: ih,
-      fillH: 0,
-      extra: 0,
-      standalone: false,
-    };
-  }
-
   function pinPhoneStage() {
     const stage = document.getElementById("fit-stage");
     const app = document.getElementById("app");
@@ -1022,21 +971,11 @@
 
     if (isDesktopLayout()) {
       stage.classList.remove("fit-stage--fluid");
-      stage.classList.remove("is-standalone");
       root.classList.remove("pwa-standalone");
-      root.style.removeProperty("--vv-top");
-      root.style.removeProperty("--vv-left");
-      root.style.removeProperty("--vv-w");
-      root.style.removeProperty("--vv-h");
-      root.style.removeProperty("--pwa-fill-h");
-      root.style.removeProperty("--pwa-extra-b");
-      stage.style.top = "";
-      stage.style.left = "";
-      stage.style.right = "";
-      stage.style.bottom = "";
-      stage.style.width = "";
-      stage.style.height = "";
-      stage.style.position = "";
+      ["--vv-top", "--vv-left", "--vv-w", "--vv-h", "--pwa-fill-h", "--pwa-extra-b"].forEach(
+        (k) => root.style.removeProperty(k)
+      );
+      stage.style.cssText = "";
       app.style.width = "";
       app.style.height = "";
       app.style.maxWidth = "";
@@ -1048,37 +987,47 @@
 
     stage.classList.add("fit-stage--fluid");
     stage.style.position = "fixed";
-    const box = measurePhoneStageBox();
+    const standalone = isStandaloneDisplay();
+    const vv = window.visualViewport;
+    const iw = window.innerWidth || 0;
+    const ih = window.innerHeight || 0;
 
-    if (box.standalone) {
+    if (standalone) {
+      // Head already set fillH. Only refresh vars — do NOT fight with inline geometry.
+      const fillH = pwaFillHeightPx();
+      const extra = pwaExtraBottomPx();
       root.classList.add("pwa-standalone");
-      stage.classList.add("is-standalone");
-      root.style.setProperty("--pwa-fill-h", `${box.fillH}px`);
-      root.style.setProperty("--pwa-extra-b", `${box.extra}px`);
-      root.style.setProperty("--vv-top", "0px");
-      root.style.setProperty("--vv-left", "0px");
-      root.style.setProperty("--vv-w", `${box.width}px`);
-      root.style.setProperty("--vv-h", `${box.height}px`);
-      // Prefer CSS calc height; clear conflicting inline that can fight fillH
-      stage.style.top = "0";
-      stage.style.left = "0";
-      stage.style.right = "0";
-      stage.style.bottom = "auto";
-      stage.style.width = "100%";
-      stage.style.height = `calc(var(--pwa-fill-h) + var(--pwa-extra-b, 0px))`;
+      root.style.setProperty("--pwa-fill-h", `${fillH}px`);
+      root.style.setProperty("--pwa-extra-b", `${extra}px`);
+      // Clear any leftover inline size from earlier builds
+      stage.style.top = "";
+      stage.style.left = "";
+      stage.style.right = "";
+      stage.style.bottom = "";
+      stage.style.width = "";
+      stage.style.height = "";
     } else {
       root.classList.remove("pwa-standalone");
-      stage.classList.remove("is-standalone");
       root.style.removeProperty("--pwa-fill-h");
       root.style.removeProperty("--pwa-extra-b");
-      root.style.setProperty("--vv-top", `${box.top}px`);
-      root.style.setProperty("--vv-left", `${box.left}px`);
-      root.style.setProperty("--vv-w", `${box.width}px`);
-      root.style.setProperty("--vv-h", `${box.height}px`);
-      stage.style.top = `${box.top}px`;
-      stage.style.left = `${box.left}px`;
-      stage.style.width = `${box.width}px`;
-      stage.style.height = `${box.height}px`;
+      let top = 0;
+      let left = 0;
+      let width = iw;
+      let height = ih;
+      if (vv && vv.height > 40 && vv.width > 40) {
+        top = Math.max(0, Math.round(vv.offsetTop) || 0);
+        left = Math.max(0, Math.round(vv.offsetLeft) || 0);
+        width = Math.round(vv.width);
+        height = Math.round(vv.height);
+      }
+      root.style.setProperty("--vv-top", `${top}px`);
+      root.style.setProperty("--vv-left", `${left}px`);
+      root.style.setProperty("--vv-w", `${width}px`);
+      root.style.setProperty("--vv-h", `${height}px`);
+      stage.style.top = `${top}px`;
+      stage.style.left = `${left}px`;
+      stage.style.width = `${width}px`;
+      stage.style.height = `${height}px`;
       stage.style.right = "auto";
       stage.style.bottom = "auto";
     }
