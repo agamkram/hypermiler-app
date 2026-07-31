@@ -27,9 +27,10 @@
   <meta name="twitter:image" content="https://hypermiler.markmaga.com/icon-512.png" />
   <title>HyperMiler</title>
   <!--
-    Pin visible viewport BEFORE first paint. Without this, CSS inset:0 paints the
-    tall layout viewport, then JS shrinks to visualViewport and the UI jumps up
-    to the Safari toolbar (the flash you saw).
+    Geometry BEFORE first paint.
+    Safari tab → visualViewport (short, above toolbar).
+    PWA → full device height (screen), NEVER short VV — that caused the jump
+    and left the home-screen app stuck at Safari-height.
   -->
   <script>
     (function () {
@@ -38,27 +39,42 @@
         var standalone =
           (window.navigator && window.navigator.standalone === true) ||
           (window.matchMedia &&
-            window.matchMedia("(display-mode: standalone)").matches);
+            (window.matchMedia("(display-mode: standalone)").matches ||
+              window.matchMedia("(display-mode: fullscreen)").matches ||
+              window.matchMedia("(display-mode: minimal-ui)").matches));
         var vv = window.visualViewport;
+        var iw = window.innerWidth || 0;
+        var ih = window.innerHeight || 0;
+        var sw = (window.screen && window.screen.width) || 0;
+        var sh = (window.screen && window.screen.height) || 0;
+        var screenMax = Math.max(sw, sh);
+        var screenMin = Math.min(sw, sh);
         var top = 0;
         var left = 0;
-        var w = window.innerWidth || 0;
-        var h = window.innerHeight || 0;
-        if (vv && vv.height > 40 && vv.width > 40) {
+        var w = iw;
+        var h = ih;
+        if (standalone) {
+          // Full-bleed home screen (SuperMars-style fill)
+          var portrait = ih >= iw;
+          h = portrait
+            ? Math.max(ih, screenMax || 0)
+            : Math.max(ih, screenMin || 0);
+          w = portrait
+            ? Math.max(iw, screenMin || 0)
+            : Math.max(iw, screenMax || 0);
+          top = 0;
+          left = 0;
+          r.classList.add("is-standalone");
+        } else if (vv && vv.height > 40 && vv.width > 40) {
           top = Math.max(0, Math.round(vv.offsetTop) || 0);
           left = Math.max(0, Math.round(vv.offsetLeft) || 0);
           w = Math.round(vv.width);
           h = Math.round(vv.height);
-          if (standalone) {
-            h = Math.max(h, Math.round((window.innerHeight || h) - top));
-            w = Math.max(w, Math.round((window.innerWidth || w) - left));
-          }
         }
         r.style.setProperty("--vv-top", top + "px");
         r.style.setProperty("--vv-left", left + "px");
-        r.style.setProperty("--vv-w", w + "px");
-        r.style.setProperty("--vv-h", h + "px");
-        if (standalone) r.classList.add("is-standalone");
+        r.style.setProperty("--vv-w", (w || iw) + "px");
+        r.style.setProperty("--vv-h", (h || ih) + "px");
       } catch (e) {}
     })();
   </script>
@@ -87,11 +103,16 @@
       --red: #f87171;
       --border: rgba(255, 255, 255, 0.08);
       --app-gap: 0.5rem;
-      /* Fallbacks if head script has not run: small viewport = chrome expanded */
+      /* Safari fallback = short viewport; PWA head script overwrites with screen H */
       --vv-top: 0px;
       --vv-left: 0px;
       --vv-w: 100vw;
       --vv-h: 100svh;
+    }
+
+    /* PWA: prefer large viewport until script sets screen px (avoid short-settle) */
+    html.is-standalone {
+      --vv-h: 100dvh;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -711,8 +732,8 @@
     </main>
   </div>
 
-  <script src="fit-to-screen.js?v=fluid3"></script>
-  <script src="app.js?v=fluid3"></script>
+  <script src="fit-to-screen.js?v=fluid4"></script>
+  <script src="app.js?v=fluid4"></script>
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
   </script>

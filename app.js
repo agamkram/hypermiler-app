@@ -924,13 +924,61 @@
    */
   function isStandaloneDisplay() {
     try {
+      if (window.navigator.standalone === true) return true;
       return (
         window.matchMedia("(display-mode: standalone)").matches ||
-        window.navigator.standalone === true
+        window.matchMedia("(display-mode: fullscreen)").matches ||
+        window.matchMedia("(display-mode: minimal-ui)").matches
       );
     } catch (_) {
-      return false;
+      return window.navigator.standalone === true;
     }
+  }
+
+  /** Safari tab = short VV. PWA = full device (screen), never short VV. */
+  function measurePhoneStageBox() {
+    const iw = window.innerWidth || 0;
+    const ih = window.innerHeight || 0;
+    const sw = window.screen?.width || 0;
+    const sh = window.screen?.height || 0;
+    const screenMax = Math.max(sw, sh);
+    const screenMin = Math.min(sw, sh);
+    const standalone = isStandaloneDisplay();
+    const vv = window.visualViewport;
+
+    if (standalone) {
+      const portrait = ih >= iw;
+      // SuperMars A2HS fill: use the long screen edge in portrait
+      let height = portrait
+        ? Math.max(ih, screenMax || 0)
+        : Math.max(ih, screenMin || 0);
+      let width = portrait
+        ? Math.max(iw, screenMin || 0)
+        : Math.max(iw, screenMax || 0);
+      // Never shrink below a taller value we already painted (stops jump-down)
+      const prevH = parseFloat(
+        document.documentElement.style.getPropertyValue("--vv-h")
+      );
+      if (Number.isFinite(prevH) && prevH > height) height = prevH;
+      return {
+        top: 0,
+        left: 0,
+        width: width || iw,
+        height: height || ih,
+        standalone: true,
+      };
+    }
+
+    if (vv && vv.height > 40 && vv.width > 40) {
+      return {
+        top: Math.max(0, Math.round(vv.offsetTop) || 0),
+        left: Math.max(0, Math.round(vv.offsetLeft) || 0),
+        width: Math.round(vv.width),
+        height: Math.round(vv.height),
+        standalone: false,
+      };
+    }
+    return { top: 0, left: 0, width: iw, height: ih, standalone: false };
   }
 
   function pinPhoneStage() {
@@ -965,36 +1013,19 @@
 
     stage.classList.add("fit-stage--fluid");
     stage.style.position = "fixed";
-    const vv = window.visualViewport;
-    const standalone = isStandaloneDisplay();
-    stage.classList.toggle("is-standalone", standalone);
-    root.classList.toggle("is-standalone", standalone);
+    const box = measurePhoneStageBox();
+    stage.classList.toggle("is-standalone", box.standalone);
+    root.classList.toggle("is-standalone", box.standalone);
 
-    // Same geometry as head bootstrap — keep CSS vars + inline in sync (no jump).
-    let top = 0;
-    let left = 0;
-    let width = window.innerWidth || 0;
-    let height = window.innerHeight || 0;
-    if (vv && vv.height > 40 && vv.width > 40) {
-      top = Math.max(0, Math.round(vv.offsetTop) || 0);
-      left = Math.max(0, Math.round(vv.offsetLeft) || 0);
-      width = Math.round(vv.width);
-      height = Math.round(vv.height);
-      if (standalone) {
-        height = Math.max(height, Math.round((window.innerHeight || height) - top));
-        width = Math.max(width, Math.round((window.innerWidth || width) - left));
-      }
-    }
+    root.style.setProperty("--vv-top", `${box.top}px`);
+    root.style.setProperty("--vv-left", `${box.left}px`);
+    root.style.setProperty("--vv-w", `${box.width}px`);
+    root.style.setProperty("--vv-h", `${box.height}px`);
 
-    root.style.setProperty("--vv-top", `${top}px`);
-    root.style.setProperty("--vv-left", `${left}px`);
-    root.style.setProperty("--vv-w", `${width}px`);
-    root.style.setProperty("--vv-h", `${height}px`);
-
-    stage.style.top = `${top}px`;
-    stage.style.left = `${left}px`;
-    stage.style.width = `${width}px`;
-    stage.style.height = `${height}px`;
+    stage.style.top = `${box.top}px`;
+    stage.style.left = `${box.left}px`;
+    stage.style.width = `${box.width}px`;
+    stage.style.height = `${box.height}px`;
     stage.style.right = "auto";
     stage.style.bottom = "auto";
 
@@ -1030,8 +1061,11 @@
     } else {
       pinPhoneStage();
       window.addEventListener("resize", pinPhoneStage);
-      window.visualViewport?.addEventListener("resize", pinPhoneStage);
-      window.visualViewport?.addEventListener("scroll", pinPhoneStage);
+      // Safari only: VV changes with toolbar. PWA must NOT re-pin to short VV.
+      if (!isStandaloneDisplay()) {
+        window.visualViewport?.addEventListener("resize", pinPhoneStage);
+        window.visualViewport?.addEventListener("scroll", pinPhoneStage);
+      }
     }
   }
 
