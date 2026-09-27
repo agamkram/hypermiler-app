@@ -1,3 +1,7 @@
 .DS_Store
 .vercel
 node_modules
+
+# Local HTTPS preview cert + private key. Never record these.
+.local-cert.pem
+.local-key.pem
