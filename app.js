@@ -86,6 +86,49 @@
     return window.matchMedia(DESKTOP_MQ).matches;
   }
 
+  /** Phone in either orientation. iPad short side is well above 500. */
+  function isPhoneShell() {
+    const w = window.innerWidth || 0;
+    const h = window.innerHeight || 0;
+    if (Math.min(w, h) <= 500) return true;
+    return window.matchMedia("(max-width: 500px)").matches;
+  }
+
+  function applyArtboard(stage, app) {
+    stage.classList.remove("fit-stage--fluid");
+    stage.classList.add("is-artboard");
+    const ART_W = 390;
+    const ART_H = 844;
+    app.style.width = ART_W + "px";
+    app.style.height = ART_H + "px";
+    app.style.maxWidth = "none";
+    app.style.flex = "0 0 auto";
+    app.style.minHeight = "0";
+    const cs = getComputedStyle(stage);
+    const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const sw = Math.max(1, stage.clientWidth - padX);
+    const sh = Math.max(1, stage.clientHeight - padY);
+    const scale = Math.min(sw / ART_W, sh / ART_H);
+    const touch =
+      (navigator.maxTouchPoints || 0) > 0 ||
+      window.matchMedia("(pointer: coarse)").matches;
+    if (touch && window.CSS && CSS.supports("zoom", "1")) {
+      app.style.transform = "none";
+      app.style.zoom = String(scale);
+    } else {
+      app.style.zoom = "";
+      app.style.transform = "scale(" + scale + ")";
+      app.style.transformOrigin = "center center";
+    }
+    app.classList.add("is-fitted");
+  }
+
+  function clearArtboard(stage, app) {
+    stage.classList.remove("is-artboard");
+    app.style.zoom = "";
+  }
+
   function applyUnitsLabels() {
     el.speedUnit.textContent = useMph ? "mph" : "km/h";
   }
@@ -976,6 +1019,7 @@
         (k) => root.style.removeProperty(k)
       );
       stage.style.cssText = "";
+      clearArtboard(stage, app);
       app.style.width = "";
       app.style.height = "";
       app.style.maxWidth = "";
@@ -985,6 +1029,55 @@
       return;
     }
 
+    if (!isPhoneShell()) {
+      stage.classList.remove("fit-stage--fluid");
+      stage.style.position = "fixed";
+      const standalone = isStandaloneDisplay();
+      const vv = window.visualViewport;
+      const iw = window.innerWidth || 0;
+      const ih = window.innerHeight || 0;
+      if (standalone) {
+        const fillH = pwaFillHeightPx();
+        const extra = pwaExtraBottomPx();
+        root.classList.add("pwa-standalone");
+        root.style.setProperty("--pwa-fill-h", `${fillH}px`);
+        root.style.setProperty("--pwa-extra-b", `${extra}px`);
+        stage.style.top = "";
+        stage.style.left = "";
+        stage.style.right = "";
+        stage.style.bottom = "";
+        stage.style.width = "";
+        stage.style.height = "";
+      } else {
+        root.classList.remove("pwa-standalone");
+        root.style.removeProperty("--pwa-fill-h");
+        root.style.removeProperty("--pwa-extra-b");
+        let top = 0;
+        let left = 0;
+        let width = iw;
+        let height = ih;
+        if (vv && vv.height > 40 && vv.width > 40) {
+          top = Math.max(0, Math.round(vv.offsetTop) || 0);
+          left = Math.max(0, Math.round(vv.offsetLeft) || 0);
+          width = Math.round(vv.width);
+          height = Math.round(vv.height);
+        }
+        root.style.setProperty("--vv-top", `${top}px`);
+        root.style.setProperty("--vv-left", `${left}px`);
+        root.style.setProperty("--vv-w", `${width}px`);
+        root.style.setProperty("--vv-h", `${height}px`);
+        stage.style.top = `${top}px`;
+        stage.style.left = `${left}px`;
+        stage.style.width = `${width}px`;
+        stage.style.height = `${height}px`;
+        stage.style.right = "auto";
+        stage.style.bottom = "auto";
+      }
+      applyArtboard(stage, app);
+      return;
+    }
+
+    clearArtboard(stage, app);
     stage.classList.add("fit-stage--fluid");
     stage.style.position = "fixed";
     const standalone = isStandaloneDisplay();

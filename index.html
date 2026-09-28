@@ -607,8 +607,23 @@
 
     /*
      * Mac / PC only — NOT iPad.
-     * Desktop keeps FitToScreen scale; phone/iPad stay fluid above.
+     * Desktop keeps FitToScreen. iPad uses the phone board scaled to height.
      */
+    .fit-stage.is-artboard {
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    .fit-stage.is-artboard .app {
+      flex: 0 0 auto !important;
+      width: 390px !important;
+      height: 844px !important;
+      max-width: none !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      transform-origin: center center;
+    }
+
     @media (hover: hover) and (pointer: fine) and (min-width: 900px) {
       .fit-stage {
         align-items: flex-start;
@@ -742,8 +757,8 @@
     </main>
   </div>
 
-  <script src="fit-to-screen.js?v=fluid8"></script>
-  <script src="app.js?v=fluid8"></script>
+  <script src="fit-to-screen.js?v=fluid9"></script>
+  <script src="app.js?v=fluid9"></script>
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
   </script>
